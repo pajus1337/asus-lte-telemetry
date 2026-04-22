@@ -1,0 +1,134 @@
+# =============================================================================
+# asus-lte-telemetry configuration
+# =============================================================================
+# This is the default configuration. Edit values to suit your setup.
+# Changes take effect on the next dispatcher run (within 60 seconds).
+#
+# Format: simple INI with [sections] and key = value pairs.
+# Comments start with '#' or ';'. Whitespace around '=' is ignored.
+# =============================================================================
+
+[general]
+# Path to the SQLite database file
+db_path = /tmp/mnt/System/asus-lte-telemetry/db/metrics.db
+
+# Path to log file (collector + dispatcher output)
+log_path = /tmp/mnt/System/asus-lte-telemetry/logs/monitor.log
+
+# Log level: debug | info | warning | error
+log_level = info
+
+# Lock directory (for preventing overlapping runs)
+lock_dir = /tmp/asus-lte-telemetry
+
+# Serial port for AT commands
+at_port = /dev/ttyUSB2
+
+# WAN interface (for vnstat and /proc/net/dev)
+wan_interface = wwan0
+
+# -----------------------------------------------------------------------------
+# Sampling mode
+# -----------------------------------------------------------------------------
+# Active mode. Predefined: normal | debug | night
+# You can also define custom modes as [mode.<name>] and set mode = <name>.
+[sampling]
+mode = normal
+
+# -----------------------------------------------------------------------------
+# Mode definitions
+# -----------------------------------------------------------------------------
+# Each mode specifies how often each collector runs, in seconds.
+# The dispatcher runs once per minute and decides which collectors to invoke
+# based on the time since their last successful run.
+#
+# Sub-minute intervals are supported via in-dispatcher sleep loops.
+# -----------------------------------------------------------------------------
+
+[mode.normal]
+lte_interval_sec    = 60
+system_interval_sec = 300
+ping_interval_sec   = 300
+vnstat_interval_sec = 300
+
+[mode.debug]
+lte_interval_sec    = 10
+system_interval_sec = 60
+ping_interval_sec   = 60
+vnstat_interval_sec = 60
+
+[mode.night]
+lte_interval_sec    = 300
+system_interval_sec = 600
+ping_interval_sec   = 600
+vnstat_interval_sec = 900
+
+# -----------------------------------------------------------------------------
+# Automatic mode switching
+# -----------------------------------------------------------------------------
+[auto_switch]
+enabled = true
+
+# Switch to debug mode if SINR drops below this value (dB)
+debug_on_sinr_below = 5
+
+# Switch to debug mode on cell change (for 10 minutes)
+debug_on_cell_change = true
+
+# Night mode time window (24h, local time)
+night_hours_start = 01:00
+night_hours_end   = 06:00
+
+# How long to stay in debug mode after trigger (seconds)
+debug_linger_sec = 600
+
+# -----------------------------------------------------------------------------
+# Ping monitoring targets
+# -----------------------------------------------------------------------------
+# One target per line. Format: <label>|<address>|<count>
+# If <address> is the literal word "gateway", the current default gateway
+# (from `ip route`) is used dynamically.
+[ping]
+targets =
+    cloudflare|1.1.1.1|3
+    google|8.8.8.8|3
+    gateway|gateway|3
+
+# Per-ping timeout in seconds
+timeout_sec = 2
+
+# Alert if loss exceeds this percentage (logged as event)
+loss_alert_pct = 20
+
+# -----------------------------------------------------------------------------
+# Event detection thresholds
+# -----------------------------------------------------------------------------
+[events]
+# sinr_low event fires after this many consecutive samples below threshold
+sinr_low_consecutive = 3
+sinr_low_threshold   = 5
+
+# RRC disconnect event after this duration of NOCONN
+rrc_disconnect_after_sec = 300
+
+# -----------------------------------------------------------------------------
+# Data retention
+# -----------------------------------------------------------------------------
+[retention]
+# How many days of raw samples to keep
+days = 180
+
+# Events are kept indefinitely by default
+keep_events_forever = true
+
+# Run VACUUM this often (days) — heavy operation, weekly is fine
+vacuum_interval_days = 7
+
+# -----------------------------------------------------------------------------
+# Dashboard
+# -----------------------------------------------------------------------------
+[dashboard]
+enabled = true
+bind_address = 192.168.50.1
+port = 8080
+# LAN-only: bind_address should be the router's LAN IP, NOT 0.0.0.0

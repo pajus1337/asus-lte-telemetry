@@ -1,0 +1,30 @@
+﻿# Generated at install / runtime
+db/
+logs/
+backups/
+state/
+config/config.ini
+
+# But keep the example
+!config/config.ini.example
+
+# OS junk
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Temp files
+/tmp/*
+*.tmp
+
+# Archives (distribute via GitHub Releases, not git)
+*.tar.gz
+*.tgz
+*.zip
+
+# Editor configs
+.vscode/
+.idea/
+*.sublime-*

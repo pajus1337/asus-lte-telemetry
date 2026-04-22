@@ -1,0 +1,328 @@
+#!/bin/sh
+# =============================================================================
+# rmon: User-facing CLI for asus-lte-telemetry
+# =============================================================================
+#
+# This is a skeleton v0.1. Full implementation lands in v0.2 along with the
+# library functions and collectors it depends on.
+#
+# Usage:
+#   rmon <command> [args]
+#
+# Commands (some placeholders for v0.2):
+#   status                   Show current collection state and last run times
+#   tail <metric> [count]    Show last N samples (metric = lte|system|ping|ca)
+#   mode [name]              Get or set sampling mode (normal|debug|night)
+#   export [--last <dur>]    Export recent data to CSV
+#   db info                  Show database stats
+#   db reset                 Wipe database (with confirmation + backup)
+#   db purge --older-than D  Remove samples older than D days
+#   events [count]           Show recent detected events
+#   help                     Show this help
+#   version                  Show version
+# =============================================================================
+
+set -u
+
+VERSION="0.1.0"
+INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
+DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
+CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"
+
+SQLITE=/opt/bin/sqlite3
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+usage() {
+    cat <<EOF
+rmon ${VERSION} — asus-lte-telemetry CLI
+
+Usage: rmon <command> [args]
+
+Commands:
+  status                     Show collector state and last run times
+  tail <metric> [count]      Show last N samples (default: 10)
+                             metrics: lte | system | ping | ca | events
+  mode [name]                Get or set sampling mode
+  export [--last <dur>]      Export data (e.g. --last 24h, --last 7d)
+  events [count]             Show recent events
+  db info                    Database size, row counts, oldest/newest sample
+  db reset                   Wipe database (with backup + confirmation)
+  db purge --older-than D    Remove samples older than D days
+  version                    Show version
+  help                       This help
+
+Examples:
+  rmon status
+  rmon tail lte 20
+  rmon mode debug
+  rmon export --last 24h > lte-last24h.csv
+  rmon db purge --older-than 30d
+
+Full documentation:
+  https://github.com/pajus1337/asus-lte-telemetry
+
+EOF
+}
+
+check_db() {
+    if [ ! -f "$DB_PATH" ]; then
+        echo "ERROR: database not found at $DB_PATH" >&2
+        echo "Has the installer been run?" >&2
+        exit 1
+    fi
+    if [ ! -x "$SQLITE" ]; then
+        echo "ERROR: sqlite3 not found at $SQLITE" >&2
+        echo "Install: opkg install sqlite3-cli" >&2
+        exit 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# command: status
+# ---------------------------------------------------------------------------
+cmd_status() {
+    check_db
+    echo "=== asus-lte-telemetry status ==="
+    echo ""
+    echo "Database:    $DB_PATH"
+    DB_SIZE=$(wc -c < "$DB_PATH" 2>/dev/null || echo "?")
+    echo "DB size:     $DB_SIZE bytes"
+    echo ""
+    echo "Collector state:"
+    "$SQLITE" -header -column "$DB_PATH" \
+        "SELECT collector_name, datetime(last_run_ts, 'unixepoch', 'localtime') AS last_run, last_status, last_error FROM collector_state ORDER BY collector_name;"
+    echo ""
+    echo "Latest samples per metric:"
+    "$SQLITE" -header -column "$DB_PATH" \
+        "SELECT 'lte'    AS metric, COUNT(*) AS count, datetime(MAX(ts),'unixepoch','localtime') AS newest FROM lte_samples
+         UNION ALL SELECT 'system', COUNT(*), datetime(MAX(ts),'unixepoch','localtime') FROM system_samples
+         UNION ALL SELECT 'ping',   COUNT(*), datetime(MAX(ts),'unixepoch','localtime') FROM ping_samples
+         UNION ALL SELECT 'events', COUNT(*), datetime(MAX(ts),'unixepoch','localtime') FROM events;"
+}
+
+# ---------------------------------------------------------------------------
+# command: tail
+# ---------------------------------------------------------------------------
+cmd_tail() {
+    check_db
+    metric="${1:-lte}"
+    count="${2:-10}"
+
+    case "$metric" in
+        lte)
+            "$SQLITE" -header -column "$DB_PATH" \
+                "SELECT datetime(ts,'unixepoch','localtime') AS time, rat, band, rsrp, rsrq, sinr, cell_id_hex, pci
+                 FROM lte_samples ORDER BY ts DESC LIMIT $count;"
+            ;;
+        system)
+            "$SQLITE" -header -column "$DB_PATH" \
+                "SELECT datetime(ts,'unixepoch','localtime') AS time, load_1min, mem_used_kb, swap_used_kb, uptime_sec
+                 FROM system_samples ORDER BY ts DESC LIMIT $count;"
+            ;;
+        ping)
+            "$SQLITE" -header -column "$DB_PATH" \
+                "SELECT datetime(ts,'unixepoch','localtime') AS time, target_label, loss_pct, rtt_avg_ms
+                 FROM ping_samples ORDER BY ts DESC LIMIT $count;"
+            ;;
+        ca)
+            "$SQLITE" -header -column "$DB_PATH" \
+                "SELECT datetime(ts,'unixepoch','localtime') AS time, cc_type, band, bandwidth, rsrp, sinr
+                 FROM ca_samples ORDER BY ts DESC LIMIT $count;"
+            ;;
+        events)
+            cmd_events "$count"
+            ;;
+        *)
+            echo "Unknown metric: $metric" >&2
+            echo "Valid: lte | system | ping | ca | events" >&2
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# command: events
+# ---------------------------------------------------------------------------
+cmd_events() {
+    check_db
+    count="${1:-20}"
+    "$SQLITE" -header -column "$DB_PATH" \
+        "SELECT datetime(ts,'unixepoch','localtime') AS time, event_type, severity, details
+         FROM events ORDER BY ts DESC LIMIT $count;"
+}
+
+# ---------------------------------------------------------------------------
+# command: mode
+# ---------------------------------------------------------------------------
+cmd_mode() {
+    new_mode="${1:-}"
+
+    if [ -z "$new_mode" ]; then
+        # Get current mode
+        if [ -f "$CONFIG_FILE" ]; then
+            grep -E '^[[:space:]]*mode[[:space:]]*=' "$CONFIG_FILE" | head -1 | sed 's/.*=[[:space:]]*//'
+        else
+            echo "Config file not found: $CONFIG_FILE" >&2
+            exit 1
+        fi
+        return
+    fi
+
+    case "$new_mode" in
+        normal|debug|night)
+            # Set mode: simple in-place edit of [sampling] section
+            if [ ! -f "$CONFIG_FILE" ]; then
+                echo "Config file not found: $CONFIG_FILE" >&2
+                exit 1
+            fi
+            # Use a temp file + move for atomic update
+            TMP=$(/opt/bin/mktemp /tmp/rmon-config.XXXXXX)
+            awk -v new="$new_mode" '
+                /^\[sampling\]/ { in_section=1; print; next }
+                /^\[/ && !/^\[sampling\]/ { in_section=0 }
+                in_section && /^[[:space:]]*mode[[:space:]]*=/ { print "mode = " new; next }
+                { print }
+            ' "$CONFIG_FILE" > "$TMP" && mv "$TMP" "$CONFIG_FILE"
+            echo "Mode set to: $new_mode"
+            echo "(Will take effect within 60 seconds)"
+            ;;
+        *)
+            echo "Unknown mode: $new_mode" >&2
+            echo "Valid: normal | debug | night" >&2
+            echo "(Custom modes can be defined in config.ini)" >&2
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# command: db
+# ---------------------------------------------------------------------------
+cmd_db() {
+    check_db
+    sub="${1:-info}"
+    shift 2>/dev/null || true
+
+    case "$sub" in
+        info)
+            DB_SIZE=$(wc -c < "$DB_PATH")
+            echo "Database: $DB_PATH"
+            echo "Size:     $DB_SIZE bytes"
+            echo ""
+            echo "Row counts:"
+            "$SQLITE" -column "$DB_PATH" \
+                "SELECT 'lte_samples     ' AS t, COUNT(*) FROM lte_samples
+                 UNION ALL SELECT 'ca_samples      ', COUNT(*) FROM ca_samples
+                 UNION ALL SELECT 'neighbour_cells ', COUNT(*) FROM neighbour_cells
+                 UNION ALL SELECT 'temp_samples    ', COUNT(*) FROM temp_samples
+                 UNION ALL SELECT 'system_samples  ', COUNT(*) FROM system_samples
+                 UNION ALL SELECT 'ping_samples    ', COUNT(*) FROM ping_samples
+                 UNION ALL SELECT 'modem_counters  ', COUNT(*) FROM modem_counters
+                 UNION ALL SELECT 'events          ', COUNT(*) FROM events;"
+            echo ""
+            echo "Time range:"
+            "$SQLITE" -column "$DB_PATH" \
+                "SELECT 'oldest sample: ' || datetime(MIN(ts),'unixepoch','localtime') FROM lte_samples
+                 UNION ALL SELECT 'newest sample: ' || datetime(MAX(ts),'unixepoch','localtime') FROM lte_samples;"
+            ;;
+        reset)
+            printf "This will WIPE all telemetry data. Type 'yes' to confirm: "
+            read -r confirm
+            if [ "$confirm" != "yes" ]; then
+                echo "Aborted."
+                exit 0
+            fi
+            BACKUP_DIR="$INSTALL_BASE/backups"
+            mkdir -p "$BACKUP_DIR"
+            BACKUP="$BACKUP_DIR/metrics-$(/opt/bin/date +%Y%m%d-%H%M%S).db"
+            cp "$DB_PATH" "$BACKUP" || { echo "Backup failed" >&2; exit 1; }
+            echo "Backup saved: $BACKUP"
+            rm -f "$DB_PATH"
+            "$SQLITE" "$DB_PATH" < "$INSTALL_BASE/schema.sql"
+            echo "Database reset."
+            ;;
+        purge)
+            # rmon db purge --older-than 30d
+            if [ "${1:-}" != "--older-than" ]; then
+                echo "Usage: rmon db purge --older-than <N>d" >&2
+                exit 1
+            fi
+            duration="${2:-}"
+            case "$duration" in
+                *d) days=$(echo "$duration" | sed 's/d$//') ;;
+                *)  echo "Duration must end with 'd' (e.g. 30d)" >&2; exit 1 ;;
+            esac
+            cutoff=$(/opt/bin/date -d "-${days} days" +%s 2>/dev/null || echo "")
+            if [ -z "$cutoff" ]; then
+                # fallback: compute manually
+                now=$(/opt/bin/date +%s)
+                cutoff=$(( now - days * 86400 ))
+            fi
+            printf "Purge all samples older than %s days (before %s)? [y/N] " "$days" "$(/opt/bin/date -d "@$cutoff" 2>/dev/null || echo "$cutoff")"
+            read -r confirm
+            [ "$confirm" != "y" ] && [ "$confirm" != "Y" ] && { echo "Aborted."; exit 0; }
+            for table in lte_samples ca_samples neighbour_cells temp_samples system_samples ping_samples modem_counters process_health; do
+                "$SQLITE" "$DB_PATH" "DELETE FROM $table WHERE ts < $cutoff;"
+            done
+            echo "Purge complete. Run 'rmon db vacuum' to reclaim space."
+            ;;
+        vacuum)
+            echo "Running VACUUM (may take a moment)..."
+            "$SQLITE" "$DB_PATH" "VACUUM;"
+            echo "Done."
+            ;;
+        *)
+            echo "Unknown db subcommand: $sub" >&2
+            echo "Valid: info | reset | purge | vacuum" >&2
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# command: export
+# ---------------------------------------------------------------------------
+cmd_export() {
+    check_db
+    duration=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --last) duration="$2"; shift 2 ;;
+            *) echo "Unknown option: $1" >&2; exit 1 ;;
+        esac
+    done
+
+    if [ -n "$duration" ]; then
+        case "$duration" in
+            *h) n=$(echo "$duration" | sed 's/h$//'); cutoff=$(( $(/opt/bin/date +%s) - n*3600 )) ;;
+            *d) n=$(echo "$duration" | sed 's/d$//'); cutoff=$(( $(/opt/bin/date +%s) - n*86400 )) ;;
+            *)  echo "Duration must end with h or d (e.g. 24h, 7d)" >&2; exit 1 ;;
+        esac
+        where="WHERE ts >= $cutoff"
+    else
+        where=""
+    fi
+
+    # CSV export of lte_samples
+    "$SQLITE" -header -csv "$DB_PATH" \
+        "SELECT datetime(ts,'unixepoch','localtime') AS time, rat, band, rsrp, rsrq, rssi, sinr, cqi, cell_id_hex, pci, earfcn, operator
+         FROM lte_samples $where ORDER BY ts;"
+}
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
+case "${1:-help}" in
+    status)   shift; cmd_status "$@" ;;
+    tail)     shift; cmd_tail "$@" ;;
+    events)   shift; cmd_events "$@" ;;
+    mode)     shift; cmd_mode "$@" ;;
+    db)       shift; cmd_db "$@" ;;
+    export)   shift; cmd_export "$@" ;;
+    version|--version|-v) echo "rmon $VERSION" ;;
+    help|--help|-h|"") usage ;;
+    *)        echo "Unknown command: $1" >&2; echo "Run 'rmon help' for usage." >&2; exit 1 ;;
+esac

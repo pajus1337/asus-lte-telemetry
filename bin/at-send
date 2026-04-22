@@ -1,0 +1,97 @@
+#!/bin/sh
+# =============================================================================
+# at-send: Send an AT command to the Quectel modem and return the response.
+# =============================================================================
+#
+# Part of: asus-lte-telemetry
+# https://github.com/pajus1337/asus-lte-telemetry
+#
+# Tested on:
+#   ASUS 4G-AC86U + Quectel EM12-G + firmware EM12GPAR01A21M4G
+#
+# Usage:
+#   at-send "AT+COMMAND" [timeout_seconds]
+#
+# Environment variables (override defaults):
+#   AT_PORT          - serial port (default: /dev/ttyUSB2)
+#   AT_TIMEOUT       - default timeout in seconds (default: 1.5)
+#   AT_INIT_DELAY    - delay before sending command (default: 0.2)
+#
+# Exit codes:
+#   0  - command sent, response returned on stdout (may still contain ERROR)
+#   1  - usage error or port not accessible
+#   2  - required dependency missing
+#
+# Dependencies (Entware):
+#   coreutils-sleep  (for fractional-second sleep)
+#   coreutils-mktemp
+# =============================================================================
+
+set -u
+
+readonly PORT="${AT_PORT:-/dev/ttyUSB2}"
+readonly SLEEP_BIN="/opt/bin/sleep"
+readonly MKTEMP_BIN="/opt/bin/mktemp"
+readonly DEFAULT_TIMEOUT="${AT_TIMEOUT:-1.5}"
+readonly INIT_DELAY="${AT_INIT_DELAY:-0.2}"
+
+# -- argument parsing --------------------------------------------------------
+CMD="${1:-}"
+TIMEOUT="${2:-$DEFAULT_TIMEOUT}"
+
+if [ -z "$CMD" ]; then
+    cat >&2 <<EOF
+Usage: at-send "AT+COMMAND" [timeout_seconds]
+
+Examples:
+  at-send "ATI"
+  at-send 'AT+QENG="servingcell"'
+  at-send "AT+QTEMP" 2
+
+Environment:
+  AT_PORT=/dev/ttyUSB0 at-send "ATI"
+EOF
+    exit 1
+fi
+
+# -- dependency checks -------------------------------------------------------
+if [ ! -x "$SLEEP_BIN" ]; then
+    echo "ERROR: $SLEEP_BIN not found. Install: opkg install coreutils-sleep" >&2
+    exit 2
+fi
+
+if [ ! -x "$MKTEMP_BIN" ]; then
+    echo "ERROR: $MKTEMP_BIN not found. Install: opkg install coreutils-mktemp" >&2
+    exit 2
+fi
+
+if [ ! -c "$PORT" ]; then
+    echo "ERROR: Serial port $PORT not found or not a character device" >&2
+    exit 1
+fi
+
+# -- main --------------------------------------------------------------------
+TMP=$("$MKTEMP_BIN" /tmp/at-send.XXXXXX)
+trap 'rm -f "$TMP"' EXIT INT TERM
+
+# Start background reader
+cat "$PORT" > "$TMP" 2>/dev/null &
+CAT_PID=$!
+
+# Allow reader to attach before transmitting
+"$SLEEP_BIN" "$INIT_DELAY"
+
+# Transmit command with CR terminator
+printf '%s\r' "$CMD" > "$PORT"
+
+# Wait for response to accumulate
+"$SLEEP_BIN" "$TIMEOUT"
+
+# Stop reader
+kill "$CAT_PID" 2>/dev/null
+wait "$CAT_PID" 2>/dev/null
+
+# Emit captured response
+cat "$TMP"
+
+exit 0

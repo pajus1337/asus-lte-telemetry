@@ -1,0 +1,436 @@
+#!/bin/sh
+# =============================================================================
+# asus-lte-telemetry: Interactive installer
+# =============================================================================
+#
+# What this script does:
+#   1. Verifies the target environment (Entware, modem, ports, directories)
+#   2. Asks for user confirmation on key decisions
+#   3. Installs required Entware packages
+#   4. Creates the directory layout at /tmp/mnt/System/asus-lte-telemetry/
+#   5. Initialises the SQLite schema
+#   6. Writes a default config.ini
+#   7. Optionally registers the dispatcher in cron
+#   8. Runs a smoke test (AT command to modem, DB read, one collection cycle)
+#
+# What this script does NOT do:
+#   - Install or configure Entware itself (assumed already present)
+#   - Modify nvram or router firmware
+#   - Open any ports to the internet
+#   - Send any data anywhere
+#
+# Usage:
+#   sh install.sh           # interactive
+#   sh install.sh --help
+#
+# After install, you can reconfigure with:
+#   $INSTALL_DIR/install.sh --reconfigure
+# =============================================================================
+
+set -u
+
+# ----- paths ----------------------------------------------------------------
+INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
+SYMLINK_PATH="${SYMLINK_PATH:-/opt/etc/asus-lte-telemetry}"
+RMON_SYMLINK="/opt/bin/rmon"
+
+# ----- colours (only if terminal supports them) -----------------------------
+if [ -t 1 ]; then
+    C_RED="$(printf '\033[31m')"
+    C_GREEN="$(printf '\033[32m')"
+    C_YELLOW="$(printf '\033[33m')"
+    C_BLUE="$(printf '\033[34m')"
+    C_BOLD="$(printf '\033[1m')"
+    C_RST="$(printf '\033[0m')"
+else
+    C_RED="" ; C_GREEN="" ; C_YELLOW="" ; C_BLUE="" ; C_BOLD="" ; C_RST=""
+fi
+
+# ----- logging --------------------------------------------------------------
+msg()   { printf '%s\n' "$*"; }
+info()  { printf '%s[info]%s %s\n' "$C_BLUE" "$C_RST" "$*"; }
+ok()    { printf '%s[ ok ]%s %s\n' "$C_GREEN" "$C_RST" "$*"; }
+warn()  { printf '%s[warn]%s %s\n' "$C_YELLOW" "$C_RST" "$*" >&2; }
+err()   { printf '%s[err ]%s %s\n' "$C_RED" "$C_RST" "$*" >&2; }
+step()  { printf '\n%s==>%s %s%s%s\n' "$C_BLUE" "$C_RST" "$C_BOLD" "$*" "$C_RST"; }
+
+die()   { err "$@"; exit 1; }
+
+ask_yn() {
+    # ask_yn "prompt" [default_y|default_n]
+    prompt="$1"
+    default="${2:-default_y}"
+    if [ "$default" = "default_y" ]; then
+        hint="[Y/n]"
+    else
+        hint="[y/N]"
+    fi
+    printf '%s %s ' "$prompt" "$hint"
+    read -r reply
+    case "$reply" in
+        [Yy]*) return 0 ;;
+        [Nn]*) return 1 ;;
+        "")
+            [ "$default" = "default_y" ] && return 0
+            return 1
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+# ----- help -----------------------------------------------------------------
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    cat <<EOF
+asus-lte-telemetry installer
+
+Usage:
+  sh install.sh               Interactive install
+  sh install.sh --help        This help
+
+The installer is interactive: it asks for confirmation before every
+destructive step (package installation, directory creation, cron setup).
+
+Environment overrides:
+  INSTALL_BASE   Base install directory (default: /tmp/mnt/System/asus-lte-telemetry)
+  SYMLINK_PATH   Symlink for /opt/etc (default: /opt/etc/asus-lte-telemetry)
+
+EOF
+    exit 0
+fi
+
+# =============================================================================
+# Banner
+# =============================================================================
+cat <<'EOF'
+
+   _ _                                _ _
+  | | |_ ___ ____  __ _  ___  _ __  _| | |_ ___  _ __
+  | | __/ _ \  _ \/ _` |/ _ \| '_ \| | | __/ _ \| '__|
+  | | ||  __/ | | | (_| | (_) | | | | | | || (_) | |
+  |_|\__\___|_| |_|\__,_|\___/|_| |_|_|_|\__\___/|_|
+
+  LTE modem monitoring for ASUS 4G-AC86U (stock firmware + Entware)
+
+EOF
+
+# =============================================================================
+# Step 1: environment checks
+# =============================================================================
+step "Step 1/7: Environment checks"
+
+# -- user / shell ------------------------------------------------------------
+if [ "$(id -u)" != "0" ] && [ "$(whoami)" != "admin" ]; then
+    warn "Not running as root/admin. Some steps may fail."
+fi
+
+# -- architecture ------------------------------------------------------------
+ARCH=$(uname -m)
+if [ "$ARCH" != "aarch64" ]; then
+    warn "Architecture is '$ARCH', expected 'aarch64'."
+    ask_yn "Continue anyway?" default_n || die "Aborted by user"
+fi
+ok "Architecture: $ARCH"
+
+# -- Entware -----------------------------------------------------------------
+if [ ! -x /opt/bin/opkg ]; then
+    die "Entware not found at /opt/bin/opkg. Install Entware first."
+fi
+ok "Entware detected at /opt"
+
+# -- install base directory --------------------------------------------------
+if [ ! -d "$(dirname "$INSTALL_BASE")" ]; then
+    die "Parent of install directory does not exist: $(dirname "$INSTALL_BASE")
+Is the USB stick mounted? Try: mount | grep /tmp/mnt"
+fi
+ok "Install target: $INSTALL_BASE"
+
+# -- serial port -------------------------------------------------------------
+AT_PORT="/dev/ttyUSB2"
+if [ ! -c "$AT_PORT" ]; then
+    warn "AT port $AT_PORT not present."
+    warn "Available: $(ls /dev/ttyUSB* 2>/dev/null || echo 'none')"
+    ask_yn "Continue anyway?" default_n || die "Aborted by user"
+else
+    ok "AT port present: $AT_PORT"
+fi
+
+# -- check if port is held exclusively --------------------------------------
+if command -v fuser >/dev/null 2>&1; then
+    if FUSER_OUT=$(fuser "$AT_PORT" 2>&1); then
+        if [ -n "$FUSER_OUT" ] && echo "$FUSER_OUT" | grep -q '[0-9]'; then
+            warn "Port $AT_PORT is held by a process:"
+            warn "  $FUSER_OUT"
+            warn "This may interfere with AT commands."
+        fi
+    fi
+fi
+
+# =============================================================================
+# Step 2: install required Entware packages
+# =============================================================================
+step "Step 2/7: Install Entware packages"
+
+REQUIRED_PKGS="sqlite3-cli vnstat coreutils-sleep coreutils-mktemp coreutils-date coreutils-stat coreutils-timeout psmisc lsof"
+
+MISSING=""
+for pkg in $REQUIRED_PKGS; do
+    if /opt/bin/opkg list-installed | grep -q "^$pkg "; then
+        :
+    else
+        MISSING="$MISSING $pkg"
+    fi
+done
+
+if [ -z "$MISSING" ]; then
+    ok "All required packages already installed"
+else
+    info "Missing packages:$MISSING"
+    if ask_yn "Install them now?" default_y; then
+        /opt/bin/opkg update || warn "opkg update failed (continuing)"
+        # shellcheck disable=SC2086
+        /opt/bin/opkg install $MISSING || die "opkg install failed"
+        ok "Packages installed"
+    else
+        die "Cannot continue without required packages"
+    fi
+fi
+
+# =============================================================================
+# Step 3: directory layout
+# =============================================================================
+step "Step 3/7: Create directory layout"
+
+mkdir -p "$INSTALL_BASE/bin" \
+         "$INSTALL_BASE/lib" \
+         "$INSTALL_BASE/config" \
+         "$INSTALL_BASE/web" \
+         "$INSTALL_BASE/docs" \
+         "$INSTALL_BASE/db" \
+         "$INSTALL_BASE/logs" \
+         "$INSTALL_BASE/backups" \
+         "$INSTALL_BASE/state"
+
+ok "Directories created under $INSTALL_BASE"
+
+# -- copy files from the package source (same dir as this script) -----------
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+
+if [ "$SCRIPT_DIR" != "$INSTALL_BASE" ]; then
+    info "Copying project files from $SCRIPT_DIR to $INSTALL_BASE"
+    # Copy all project content except db/, logs/, state/, backups/
+    for d in bin lib config web docs; do
+        if [ -d "$SCRIPT_DIR/$d" ]; then
+            cp -rf "$SCRIPT_DIR/$d/." "$INSTALL_BASE/$d/" 2>/dev/null || true
+        fi
+    done
+    # Top-level files
+    for f in README.md LICENSE schema.sql install.sh uninstall.sh; do
+        [ -f "$SCRIPT_DIR/$f" ] && cp -f "$SCRIPT_DIR/$f" "$INSTALL_BASE/$f"
+    done
+    ok "Project files copied"
+else
+    info "Running from install location, skipping copy"
+fi
+
+# -- mark scripts executable -------------------------------------------------
+chmod +x "$INSTALL_BASE/bin/"* 2>/dev/null || true
+chmod +x "$INSTALL_BASE/install.sh" 2>/dev/null || true
+chmod +x "$INSTALL_BASE/uninstall.sh" 2>/dev/null || true
+
+# -- symlink /opt/etc/asus-lte-telemetry -> install base ---------------------------
+if [ -L "$SYMLINK_PATH" ] || [ -e "$SYMLINK_PATH" ]; then
+    rm -f "$SYMLINK_PATH"
+fi
+ln -s "$INSTALL_BASE" "$SYMLINK_PATH"
+ok "Symlink created: $SYMLINK_PATH -> $INSTALL_BASE"
+
+# -- symlink at-send to /opt/bin --------------------------------------------
+if [ -f "$INSTALL_BASE/bin/at-send" ]; then
+    ln -sf "$INSTALL_BASE/bin/at-send" /opt/bin/at-send
+    ok "Symlink created: /opt/bin/at-send"
+fi
+
+# -- symlink rmon to /opt/bin -----------------------------------------------
+if [ -f "$INSTALL_BASE/bin/rmon" ]; then
+    chmod +x "$INSTALL_BASE/bin/rmon"
+    ln -sf "$INSTALL_BASE/bin/rmon" /opt/bin/rmon
+    ok "Symlink created: /opt/bin/rmon"
+fi
+
+# =============================================================================
+# Step 4: write default config (if not present)
+# =============================================================================
+step "Step 4/7: Configuration"
+
+CONFIG_FILE="$INSTALL_BASE/config/config.ini"
+CONFIG_EXAMPLE="$INSTALL_BASE/config/config.ini.example"
+
+if [ -f "$CONFIG_FILE" ]; then
+    info "Existing config found at $CONFIG_FILE"
+    if ask_yn "Overwrite with defaults?" default_n; then
+        cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
+        ok "Default config written"
+    else
+        ok "Existing config kept"
+    fi
+else
+    cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
+    ok "Default config written to $CONFIG_FILE"
+fi
+
+# =============================================================================
+# Step 5: initialise database
+# =============================================================================
+step "Step 5/7: Initialise SQLite database"
+
+DB_PATH="$INSTALL_BASE/db/metrics.db"
+SCHEMA_PATH="$INSTALL_BASE/schema.sql"
+
+if [ ! -f "$SCHEMA_PATH" ]; then
+    die "Schema file not found at $SCHEMA_PATH"
+fi
+
+if [ -f "$DB_PATH" ]; then
+    info "Database already exists at $DB_PATH"
+    DB_SIZE=$(wc -c < "$DB_PATH" 2>/dev/null || echo "?")
+    info "  size: $DB_SIZE bytes"
+    if ask_yn "Recreate database? (existing data will be lost)" default_n; then
+        BACKUP_PATH="$INSTALL_BASE/backups/metrics-$(date +%Y%m%d-%H%M%S).db"
+        cp "$DB_PATH" "$BACKUP_PATH"
+        ok "Backup saved: $BACKUP_PATH"
+        rm -f "$DB_PATH"
+        /opt/bin/sqlite3 "$DB_PATH" < "$SCHEMA_PATH" || die "Schema creation failed"
+        ok "Database recreated"
+    else
+        ok "Existing database kept"
+        # Still run schema file — CREATE TABLE IF NOT EXISTS is safe
+        /opt/bin/sqlite3 "$DB_PATH" < "$SCHEMA_PATH" || warn "Schema apply failed (continuing)"
+    fi
+else
+    /opt/bin/sqlite3 "$DB_PATH" < "$SCHEMA_PATH" || die "Schema creation failed"
+    ok "Database created at $DB_PATH"
+fi
+
+# Verify
+if /opt/bin/sqlite3 "$DB_PATH" ".tables" >/dev/null 2>&1; then
+    TABLES=$(/opt/bin/sqlite3 "$DB_PATH" ".tables" | tr -s ' ' '\n' | grep -v '^$' | wc -l)
+    ok "Database accessible, $TABLES tables"
+else
+    die "Database verification failed"
+fi
+
+# =============================================================================
+# Step 6: cron registration (optional)
+# =============================================================================
+step "Step 6/7: Cron registration"
+
+info "The dispatcher must run every minute to collect data."
+info "On stock firmware, cron_jobs nvram does not persist — we use a different approach:"
+info "  - Add the dispatcher to /jffs/scripts/entware-boot.sh (runs at boot)"
+info "  - Also add a crontab entry via crond's config file"
+
+if ask_yn "Register dispatcher with cron now?" default_y; then
+    # Add a wakeup loop to /opt/etc/init.d/ so it starts with Entware
+    START_SCRIPT="/opt/etc/init.d/S99asus-lte-telemetry"
+
+    cat > "$START_SCRIPT" <<EOF
+#!/bin/sh
+# Start asus-lte-telemetry dispatcher loop
+# Created by install.sh
+
+ENABLED=yes
+PROCS=asus-lte-telemetry-dispatcher
+ARGS=
+PREARGS=
+DESC="asus-lte-telemetry background dispatcher"
+PATH=/opt/bin:/opt/sbin:/sbin:/bin:/usr/sbin:/usr/bin
+
+start_service() {
+    if [ -x "$INSTALL_BASE/bin/dispatcher.sh" ]; then
+        # Use nohup + background so it survives the init script exiting
+        nohup sh -c "while true; do $INSTALL_BASE/bin/dispatcher.sh >> $INSTALL_BASE/logs/dispatcher.log 2>&1; /opt/bin/sleep 60; done" >/dev/null 2>&1 &
+        echo "asus-lte-telemetry dispatcher started"
+    fi
+}
+
+stop_service() {
+    /opt/bin/pkill -f "$INSTALL_BASE/bin/dispatcher.sh" 2>/dev/null || true
+    /opt/bin/pkill -f "asus-lte-telemetry-dispatcher" 2>/dev/null || true
+    echo "asus-lte-telemetry dispatcher stopped"
+}
+
+case "\$1" in
+    start)   start_service ;;
+    stop)    stop_service ;;
+    restart) stop_service; sleep 2; start_service ;;
+    *)       echo "Usage: \$0 {start|stop|restart}" ;;
+esac
+EOF
+    chmod +x "$START_SCRIPT"
+    ok "Init script installed: $START_SCRIPT"
+    info "Note: dispatcher will actually start after next reboot."
+    info "To start now: $START_SCRIPT start"
+else
+    info "Skipping cron registration. You can enable it later:"
+    info "  $INSTALL_BASE/install.sh --reconfigure"
+fi
+
+# =============================================================================
+# Step 7: smoke test
+# =============================================================================
+step "Step 7/7: Smoke test"
+
+# Test at-send
+if [ -x "$INSTALL_BASE/bin/at-send" ] && [ -c "$AT_PORT" ]; then
+    info "Testing AT command to modem..."
+    AT_OUT=$("$INSTALL_BASE/bin/at-send" "ATI" 2 2>&1 || true)
+    if echo "$AT_OUT" | grep -q "OK"; then
+        MODEL=$(echo "$AT_OUT" | grep -E '^EM[0-9]' | head -1 || echo "unknown")
+        REV=$(echo "$AT_OUT" | grep -i "Revision" | head -1 | sed 's/Revision: *//' || echo "unknown")
+        ok "Modem responds: $MODEL ($REV)"
+    else
+        warn "AT command did not return OK. Output:"
+        echo "$AT_OUT" | sed 's/^/    /'
+    fi
+fi
+
+# Test DB
+if /opt/bin/sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM meta;" >/dev/null 2>&1; then
+    ok "Database read test passed"
+else
+    warn "Database read test failed"
+fi
+
+# =============================================================================
+# Done
+# =============================================================================
+cat <<EOF
+
+${C_GREEN}${C_BOLD}Installation complete.${C_RST}
+
+Installed to:    $INSTALL_BASE
+Database:        $DB_PATH
+Config:          $CONFIG_FILE
+Logs:            $INSTALL_BASE/logs/
+
+Next steps:
+
+  1. Review and edit configuration (optional):
+       nano $CONFIG_FILE
+
+  2. Start the dispatcher (if not already running):
+       /opt/etc/init.d/S99asus-lte-telemetry start
+
+  3. Wait 60 seconds and check collected data:
+       sqlite3 $DB_PATH "SELECT * FROM lte_samples ORDER BY ts DESC LIMIT 5;"
+
+  4. Tail the log:
+       tail -f $INSTALL_BASE/logs/dispatcher.log
+
+To uninstall:
+       sh $INSTALL_BASE/uninstall.sh
+
+Report issues:
+       https://github.com/pajus1337/asus-lte-telemetry/issues
+
+EOF
