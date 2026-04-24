@@ -164,10 +164,11 @@ db_check() {
 
 # db_transaction SQL_BLOCK — wrap multiple statements in BEGIN/COMMIT
 db_transaction() {
-    "$SQLITE" "$DB_PATH" "BEGIN TRANSACTION; $1 COMMIT;" 2>/dev/null
+    _tx_err=$("$SQLITE" "$DB_PATH" "BEGIN TRANSACTION; $1 COMMIT;" 2>&1)
     _rc=$?
     if [ $_rc -ne 0 ]; then
         log_error "db" "Transaction failed, rolling back"
+        [ -n "$_tx_err" ] && log_error "db" "SQLite: ${_tx_err}"
         db_exec "ROLLBACK;" 2>/dev/null
     fi
     return $_rc

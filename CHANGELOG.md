@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-24
+
+### Added — HTTP dashboard
+
+#### `web/index.html`
+- Single-page dark-theme monitoring dashboard served by BusyBox httpd
+- Live signal panel: operator, band, RRC state, RSRP/RSRQ/SINR with quality badges
+  (Excellent/Good/Fair/Poor/Very Poor, colour-coded green→red)
+- RSRP sparkline chart (pure SVG, 40-sample trend, colour follows signal quality)
+- Carrier Aggregation panel: CC count, per-carrier band/RSRP/SINR
+- System panel: uptime, 1-min load, RAM/swap/disk progress bars, CPU temp
+- Ping panel: per-target loss% and avg RTT
+- Modem temperature panel (XO, modem case, PA thermistor)
+- Collectors panel: last-run age and status for all four collectors
+- Events panel: last 5 events with timestamp, type, severity and details
+- Auto-refresh every 30 s with countdown indicator; dot turns red on API failure
+- Responsive 2-column grid (CSS Grid), collapses to 1 column below 640 px
+- Mode badge (normal/debug/night) colour-coded in header
+- Zero external dependencies (no CDN, no npm)
+
+#### `web/cgi-bin/api.cgi`
+- BusyBox httpd CGI, outputs single JSON object with all current state:
+  signal, ca, system, ping, temp, collectors, mode, events
+- INSTALL_BASE derived from `$0` (no hard-coded paths)
+- All nullable numeric fields serialised as JSON `null` on missing data
+- Handles empty DB gracefully (sections return `null`/`[]`)
+
+#### `web/cgi-bin/history.cgi`
+- Returns `{metric, data:[{ts,v},...], min, max}` for sparkline rendering
+- Query params: `metric=rsrp|sinr|rsrq|rssi`, `n=1..500` (default 60)
+- Metric name validated against whitelist (no SQL injection)
+
+#### `bin/rmon web`
+- `rmon web start` — launch BusyBox httpd in background (`httpd -f`), write PID file
+- `rmon web stop`  — kill httpd by PID file, clean up
+- `rmon web status` (default) — show running/stopped, print LAN URL
+- Port read from `[dashboard] port` in config.ini (default 8080)
+- LAN URL derived from `br0` interface IP
+
+### Fixed
+- `lib/db.sh` `db_transaction`: was silencing SQLite errors with `2>/dev/null`;
+  now captures and logs them the same way `db_exec` does
+
 ## [0.3.0] - 2026-04-24
 
 ### Added — CLI polish

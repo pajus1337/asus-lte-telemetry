@@ -15,6 +15,7 @@
 #                                metrics: rsrp | sinr | rsrq | rssi
 #   diag                         Modem info, signal, config, recent errors
 #   mode [name]                  Get or set sampling mode (normal|debug|night)
+#   web [start|stop|status]      HTTP dashboard on LAN (default: status)
 #   export [--last <dur>]        Export CSV to stdout (--last 24h or --last 7d)
 #   events [N]                   Last N events (default: 20)
 #   db info                      Row counts, time range, file size
@@ -27,7 +28,7 @@
 
 set -u
 
-VERSION="0.3.0"
+VERSION="0.4.0"
 INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
 DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
 CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"
@@ -52,6 +53,7 @@ Commands:
                                metrics: rsrp | sinr | rsrq | rssi
   diag                         Modem info, signal, config, recent errors
   mode [name]                  Get or set sampling mode (normal|debug|night)
+  web [start|stop|status]      HTTP dashboard — start/stop BusyBox httpd on LAN
   export [--last <dur>]        Export CSV to stdout (--last 24h or --last 7d)
   events [N]                   Last N events (default: 20)
   db info                      Row counts, time range, file size
@@ -69,6 +71,8 @@ Examples:
   rmon plot sinr 60
   rmon diag
   rmon mode debug
+  rmon web start
+  rmon web stop
   rmon export --last 24h > dump.csv
   rmon db purge --older-than 30d
 
@@ -682,6 +686,109 @@ cmd_export() {
 }
 
 # ---------------------------------------------------------------------------
+# command: web
+# ---------------------------------------------------------------------------
+_web_pid_file="/tmp/asus-lte-telemetry-httpd.pid"
+
+_web_port() {
+    _p=""
+    if [ -f "$CONFIG_FILE" ]; then
+        _p=$(awk '/^\[dashboard\]/{f=1;next}/^\[/{f=0}f && /^[[:space:]]*port[[:space:]]*=/{
+            sub(/.*=[[:space:]]*/,""); sub(/[[:space:]]*#.*$/,""); sub(/[[:space:]]+$/,""); print; exit
+        }' "$CONFIG_FILE" 2>/dev/null)
+    fi
+    echo "${_p:-8080}"
+}
+
+_web_lan_ip() {
+    _ip=$(ip addr show br0 2>/dev/null | awk '/inet /{split($2,a,"/"); print a[1]; exit}')
+    echo "${_ip:-192.168.50.1}"
+}
+
+cmd_web_start() {
+    _port=$(_web_port)
+
+    if [ -f "$_web_pid_file" ]; then
+        _pid=$(cat "$_web_pid_file" 2>/dev/null)
+        if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+            printf "Dashboard already running (pid=%s) at http://%s:%s/\n" \
+                "$_pid" "$(_web_lan_ip)" "$_port"
+            return 0
+        fi
+        rm -f "$_web_pid_file"
+    fi
+
+    if ! command -v httpd >/dev/null 2>&1; then
+        echo "ERROR: httpd not found. BusyBox httpd is required." >&2
+        return 1
+    fi
+
+    if [ ! -d "$INSTALL_BASE/web" ]; then
+        echo "ERROR: web directory not found at $INSTALL_BASE/web" >&2
+        return 1
+    fi
+
+    chmod +x "$INSTALL_BASE/web/cgi-bin/"*.cgi 2>/dev/null || true
+
+    httpd -f -p "$_port" -h "$INSTALL_BASE/web" &
+    _pid=$!
+    echo "$_pid" > "$_web_pid_file"
+
+    sleep 1
+    if kill -0 "$_pid" 2>/dev/null; then
+        printf "Dashboard started: http://%s:%s/\n" "$(_web_lan_ip)" "$_port"
+    else
+        printf "ERROR: httpd failed to start (port %s in use?)\n" "$_port" >&2
+        rm -f "$_web_pid_file"
+        return 1
+    fi
+}
+
+cmd_web_stop() {
+    if [ -f "$_web_pid_file" ]; then
+        _pid=$(cat "$_web_pid_file" 2>/dev/null)
+        if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+            kill "$_pid" && rm -f "$_web_pid_file"
+            echo "Dashboard stopped."
+        else
+            rm -f "$_web_pid_file"
+            echo "Dashboard was not running (stale PID removed)."
+        fi
+    else
+        echo "Dashboard is not running."
+    fi
+}
+
+cmd_web_status() {
+    _port=$(_web_port)
+    if [ -f "$_web_pid_file" ]; then
+        _pid=$(cat "$_web_pid_file" 2>/dev/null)
+        if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+            printf "Dashboard:  RUNNING  (pid=%s)\n" "$_pid"
+            printf "URL:        http://%s:%s/\n"    "$(_web_lan_ip)" "$_port"
+        else
+            rm -f "$_web_pid_file"
+            printf "Dashboard:  STOPPED  (stale PID file removed)\n"
+            printf "Run:        rmon web start\n"
+        fi
+    else
+        printf "Dashboard:  STOPPED\n"
+        printf "Run:        rmon web start\n"
+    fi
+}
+
+cmd_web() {
+    sub="${1:-status}"
+    shift 2>/dev/null || true
+    case "$sub" in
+        start)  cmd_web_start ;;
+        stop)   cmd_web_stop  ;;
+        status) cmd_web_status ;;
+        *) printf "Usage: rmon web {start|stop|status}\n" >&2; exit 1 ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 case "${1:-help}" in
@@ -691,6 +798,7 @@ case "${1:-help}" in
     plot)                shift; cmd_plot "$@" ;;
     diag)                shift; cmd_diag "$@" ;;
     mode)                shift; cmd_mode "$@" ;;
+    web)                 shift; cmd_web "$@" ;;
     db)                  shift; cmd_db "$@" ;;
     export)              shift; cmd_export "$@" ;;
     version|--version|-v) echo "rmon $VERSION" ;;

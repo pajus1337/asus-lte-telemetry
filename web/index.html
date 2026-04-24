@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LTE Monitor</title>
+<style>
+:root {
+  --bg:     #0f172a;
+  --card:   #1e293b;
+  --border: #334155;
+  --text:   #e2e8f0;
+  --muted:  #94a3b8;
+  --accent: #3b82f6;
+  --green:  #22c55e;
+  --lime:   #86efac;
+  --amber:  #f59e0b;
+  --orange: #f97316;
+  --red:    #ef4444;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'SF Mono','Monaco','Cascadia Code','Consolas',monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 18px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.h-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--accent);
+  letter-spacing: 0.3px;
+}
+.h-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.mode-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.mode-normal { background: rgba(59,130,246,.2); color: #93c5fd; }
+.mode-debug  { background: rgba(249,115,22,.2);  color: #fb923c; }
+.mode-night  { background: rgba(147,51,234,.2);  color: #c084fc; }
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  display: inline-block;
+  transition: background .3s;
+}
+.dot.online  { background: var(--green); }
+.dot.offline { background: var(--red); }
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+@media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.card.wide { grid-column: 1 / -1; }
+.card-title {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
+  gap: 8px;
+}
+.lbl { color: var(--muted); white-space: nowrap; }
+.val { font-weight: 600; text-align: right; }
+.qbadge {
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-left: 6px;
+}
+.q-excellent { color: var(--green); }
+.q-good      { color: var(--lime); }
+.q-fair      { color: var(--amber); }
+.q-poor      { color: var(--orange); }
+.q-vp        { color: var(--red); }
+.b-excellent { background: rgba(34,197,94,.15);  color: var(--green); }
+.b-good      { background: rgba(134,239,172,.15);color: var(--lime); }
+.b-fair      { background: rgba(245,158,11,.15); color: var(--amber); }
+.b-poor      { background: rgba(249,115,22,.15); color: var(--orange); }
+.b-vp        { background: rgba(239,68,68,.15);  color: var(--red); }
+.sparkline-wrap {
+  margin-top: 12px;
+  height: 44px;
+  opacity: .75;
+}
+.sparkline-wrap svg { display: block; }
+.bar-wrap {
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 3px;
+  margin-bottom: 6px;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width .4s ease;
+}
+.ping-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.ping-row:last-child { border-bottom: none; }
+.ping-label { min-width: 80px; }
+.ping-loss-ok   { color: var(--green); }
+.ping-loss-warn { color: var(--amber); }
+.ping-loss-bad  { color: var(--red); }
+.ev-row {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.ev-row:last-child { border-bottom: none; }
+.ev-time   { color: var(--muted); white-space: nowrap; }
+.ev-type   { font-weight: bold; white-space: nowrap; }
+.ev-info     { color: var(--accent); }
+.ev-warning  { color: var(--amber); }
+.ev-critical { color: var(--red); }
+.ev-det { color: var(--muted); font-size: 11px; word-break: break-all; }
+.col-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  gap: 12px;
+}
+.col-name { color: var(--muted); }
+.col-ok      { color: var(--green); }
+.col-error   { color: var(--red); }
+.col-never   { color: var(--border); }
+.empty { color: var(--muted); font-style: italic; padding: 4px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-title">asus-lte-telemetry</div>
+  <div class="h-right">
+    <span id="mode-badge" class="mode-badge mode-normal">normal</span>
+    <span id="status-dot" class="dot"></span>
+    <span id="updated" style="color:var(--muted)">—</span>
+    <span id="countdown" style="color:var(--border);font-size:11px"></span>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- Signal -->
+  <div class="card">
+    <div class="card-title">Signal</div>
+    <div id="sig-body"><div class="empty">No LTE data yet.</div></div>
+    <div class="sparkline-wrap" id="sparkline-wrap" style="display:none">
+      <div id="sparkline"></div>
+    </div>
+  </div>
+
+  <!-- CA -->
+  <div class="card">
+    <div class="card-title">Carrier Aggregation</div>
+    <div id="ca-body"><div class="empty">No CA data.</div></div>
+  </div>
+
+  <!-- System -->
+  <div class="card">
+    <div class="card-title">System</div>
+    <div id="sys-body"><div class="empty">No system data yet.</div></div>
+  </div>
+
+  <!-- Ping -->
+  <div class="card">
+    <div class="card-title">Ping</div>
+    <div id="ping-body"><div class="empty">No ping data yet.</div></div>
+  </div>
+
+  <!-- Collectors + Events row -->
+  <div class="card">
+    <div class="card-title">Collectors</div>
+    <div id="col-body"><div class="empty">—</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Temp</div>
+    <div id="temp-body"><div class="empty">No temp data.</div></div>
+  </div>
+
+  <!-- Events full-width -->
+  <div class="card wide">
+    <div class="card-title">Recent Events</div>
+    <div id="ev-body"><div class="empty">(none)</div></div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+
+const REFRESH  = 30;
+const API      = 'cgi-bin/api.cgi';
+const HIST     = 'cgi-bin/history.cgi';
+let countdown  = REFRESH;
+let ticker     = null;
+
+// ---------------------------------------------------------------------------
+// signal quality helpers
+// ---------------------------------------------------------------------------
+function qRsrp(v) {
+  if (v == null) return 'unknown';
+  if (v >= -80)  return 'excellent';
+  if (v >= -90)  return 'good';
+  if (v >= -100) return 'fair';
+  if (v >= -110) return 'poor';
+  return 'vp';
+}
+function qSinr(v) {
+  if (v == null) return 'unknown';
+  if (v >= 20) return 'excellent';
+  if (v >= 13) return 'good';
+  if (v >= 0)  return 'fair';
+  return 'poor';
+}
+const Q_LABEL = {excellent:'Excellent', good:'Good', fair:'Fair', poor:'Poor', vp:'Very Poor', unknown:'—'};
+const Q_COLOR = {excellent:'#22c55e', good:'#86efac', fair:'#f59e0b', poor:'#f97316', vp:'#ef4444', unknown:'#94a3b8'};
+
+function fmtUptime(s) {
+  if (!s) return '—';
+  const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60);
+  if (d > 0) return d + 'd ' + h + 'h';
+  if (h > 0) return h + 'h ' + m + 'm';
+  return m + 'm';
+}
+
+function fmtAge(ts) {
+  if (!ts || ts === '0' || ts === 0) return 'never';
+  const d = Math.floor(Date.now()/1000) - (+ts);
+  if (d < 60)    return d + 's ago';
+  if (d < 3600)  return Math.floor(d/60) + 'm ago';
+  if (d < 86400) return Math.floor(d/3600) + 'h ' + Math.floor((d%3600)/60) + 'm ago';
+  return Math.floor(d/86400) + 'd ago';
+}
+
+function esc(s) {
+  if (s == null) return '—';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function row(label, valHtml) {
+  return '<div class="row"><span class="lbl">' + esc(label) + '</span><span class="val">' + valHtml + '</span></div>';
+}
+
+// ---------------------------------------------------------------------------
+// section updaters
+// ---------------------------------------------------------------------------
+function updateSignal(sig) {
+  const el = document.getElementById('sig-body');
+  if (!sig) { el.innerHTML = '<div class="empty">No LTE data yet.</div>'; return; }
+  const qr = qRsrp(sig.rsrp), qs = qSinr(sig.sinr);
+  el.innerHTML =
+    row('Operator', esc(sig.operator || '—')) +
+    row('Band', esc(sig.band ? 'B'+sig.band+' '+sig.duplex+' '+sig.rat : '—')) +
+    row('RRC',  esc(sig.rrc_state || '—')) +
+    row('RSRP',
+      '<span class="q-'+qr+'">' + (sig.rsrp != null ? sig.rsrp+' dBm' : '—') + '</span>' +
+      '<span class="qbadge b-'+qr+'">'+Q_LABEL[qr]+'</span>') +
+    row('RSRQ', sig.rsrq != null ? sig.rsrq+' dB' : '—') +
+    row('SINR',
+      '<span class="q-'+qs+'">' + (sig.sinr != null ? sig.sinr+' dB' : '—') + '</span>' +
+      '<span class="qbadge b-'+qs+'">'+Q_LABEL[qs]+'</span>') +
+    row('Cell / PCI',
+      esc(sig.cell_id_hex || '—') + ' / ' + esc(sig.pci != null ? sig.pci : '—')) +
+    row('EARFCN', esc(sig.earfcn || '—'));
+}
+
+function updateCA(ca) {
+  const el = document.getElementById('ca-body');
+  if (!ca || ca.length === 0) {
+    el.innerHTML = '<div class="empty">No carrier aggregation active.</div>';
+    return;
+  }
+  let html = row('Carriers', String(ca.length));
+  ca.forEach(function(c) {
+    html += row(
+      (c.type||'?').toUpperCase() + ' B' + (c.band||'?'),
+      esc(c.rsrp != null ? c.rsrp+' dBm' : '—') + ' / SINR ' + esc(c.sinr != null ? c.sinr+' dB' : '—')
+    );
+  });
+  el.innerHTML = html;
+}
+
+function updateSystem(sys) {
+  const el = document.getElementById('sys-body');
+  if (!sys) { el.innerHTML = '<div class="empty">No system data yet.</div>'; return; }
+  const memPct  = sys.mem_total_kb  > 0 ? Math.round(sys.mem_used_kb  / sys.mem_total_kb  * 100) : 0;
+  const swapPct = sys.swap_total_kb > 0 ? Math.round(sys.swap_used_kb / sys.swap_total_kb * 100) : 0;
+  const diskPct = sys.disk_data_pct || 0;
+  function bar(pct) {
+    return '<div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%"></div></div>';
+  }
+  let html =
+    row('Uptime', esc(fmtUptime(sys.uptime_sec))) +
+    row('Load 1m', sys.load_1min != null ? Number(sys.load_1min).toFixed(2) : '—') +
+    row('RAM',     memPct + '%') + bar(memPct) +
+    row('Swap',    swapPct + '%') + bar(swapPct) +
+    row('Disk',    diskPct + '%') + bar(diskPct);
+  if (sys.cpu_temp != null)
+    html += row('CPU Temp', sys.cpu_temp + ' °C');
+  el.innerHTML = html;
+}
+
+function updatePing(ping) {
+  const el = document.getElementById('ping-body');
+  if (!ping || ping.length === 0) {
+    el.innerHTML = '<div class="empty">No ping data yet.</div>';
+    return;
+  }
+  el.innerHTML = ping.map(function(p) {
+    const loss = p.loss_pct != null ? p.loss_pct : '?';
+    const cls  = loss === 0 ? 'ping-loss-ok' : loss < 10 ? 'ping-loss-warn' : 'ping-loss-bad';
+    const rtt  = p.rtt_avg_ms != null ? Number(p.rtt_avg_ms).toFixed(1)+' ms' : '—';
+    return '<div class="ping-row">' +
+      '<span class="ping-label">' + esc(p.label||p.target) + '</span>' +
+      '<span class="'+cls+'">'    + loss + '%</span>' +
+      '<span>'                    + rtt  + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+function updateTemp(temp) {
+  const el = document.getElementById('temp-body');
+  if (!temp) { el.innerHTML = '<div class="empty">No temp data.</div>'; return; }
+  let html = '';
+  if (temp.xo_therm  != null) html += row('XO therm',  temp.xo_therm  + ' °C');
+  if (temp.mdm_case  != null) html += row('Modem case',temp.mdm_case  + ' °C');
+  if (temp.pa_therm  != null) html += row('PA therm',  temp.pa_therm  + ' °C');
+  el.innerHTML = html || '<div class="empty">No readings.</div>';
+}
+
+function updateCollectors(cols) {
+  const el = document.getElementById('col-body');
+  if (!cols) { el.innerHTML = '<div class="empty">—</div>'; return; }
+  const names = ['lte','ping','system','vnstat'];
+  el.innerHTML = names.map(function(n) {
+    const c = cols[n];
+    if (!c) return '';
+    const status  = c.status || 'never';
+    const ageStr  = fmtAge(c.last_run_ts);
+    const cls     = status === 'ok' ? 'col-ok' : status === 'error' ? 'col-error' : 'col-never';
+    return '<div class="col-row">' +
+      '<span class="col-name">' + n + '</span>' +
+      '<span style="color:var(--muted);font-size:11px">' + ageStr + '</span>' +
+      '<span class="' + cls + '">[' + status + ']</span>' +
+      '</div>';
+  }).join('');
+}
+
+function updateEvents(events) {
+  const el = document.getElementById('ev-body');
+  if (!events || events.length === 0) {
+    el.innerHTML = '<div class="empty">(none)</div>';
+    return;
+  }
+  el.innerHTML = events.map(function(e) {
+    const dt  = e.ts ? new Date(e.ts*1000).toLocaleString() : '—';
+    const sev = e.severity || 'info';
+    let det = '';
+    if (e.details) {
+      try { det = JSON.stringify(JSON.parse(e.details)); } catch(_) { det = String(e.details); }
+    }
+    return '<div class="ev-row">' +
+      '<span class="ev-time">' + esc(dt) + '</span>' +
+      '<span class="ev-type ev-'+sev+'">' + esc(e.type||'?') + '</span>' +
+      (det ? '<span class="ev-det">' + esc(det) + '</span>' : '') +
+      '</div>';
+  }).join('');
+}
+
+// ---------------------------------------------------------------------------
+// sparkline
+// ---------------------------------------------------------------------------
+function drawSparkline(data) {
+  const wrap = document.getElementById('sparkline-wrap');
+  const el   = document.getElementById('sparkline');
+  if (!data || data.length < 2) { wrap.style.display='none'; return; }
+  wrap.style.display = '';
+  const W=300, H=44;
+  const vals = data.map(function(d){ return d.v; });
+  const mn   = Math.min.apply(null,vals);
+  const mx   = Math.max.apply(null,vals);
+  const rng  = mx - mn || 1;
+  const pts  = data.map(function(d,i){
+    const x = (i/(data.length-1))*W;
+    const y = H - 2 - ((d.v - mn)/rng*(H-4));
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  const color = Q_COLOR[qRsrp(vals[vals.length-1])] || '#94a3b8';
+  el.innerHTML =
+    '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:'+H+'px">' +
+    '<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linejoin="round"/>' +
+    '</svg>';
+}
+
+// ---------------------------------------------------------------------------
+// main fetch & render
+// ---------------------------------------------------------------------------
+async function refresh() {
+  try {
+    const r = await fetch(API + '?_=' + Date.now());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+
+    const mb = document.getElementById('mode-badge');
+    const mode = d.mode || 'normal';
+    mb.textContent = mode;
+    mb.className = 'mode-badge mode-' + (mode === 'debug' || mode === 'night' ? mode : 'normal');
+
+    updateSignal(d.signal);
+    updateCA(d.ca);
+    updateSystem(d.system);
+    updatePing(d.ping);
+    updateTemp(d.temp);
+    updateCollectors(d.collectors);
+    updateEvents(d.events);
+
+    document.getElementById('updated').textContent = new Date().toLocaleTimeString();
+    document.getElementById('status-dot').className = 'dot online';
+    countdown = REFRESH;
+  } catch(e) {
+    document.getElementById('status-dot').className = 'dot offline';
+    console.error('API error:', e);
+  }
+
+  try {
+    const hr = await fetch(HIST + '?metric=rsrp&n=40&_=' + Date.now());
+    if (hr.ok) {
+      const hd = await hr.json();
+      if (hd && hd.data) drawSparkline(hd.data);
+    }
+  } catch(_) {}
+}
+
+function tick() {
+  countdown--;
+  if (countdown <= 0) { countdown = REFRESH; refresh(); }
+  const el = document.getElementById('countdown');
+  if (el) el.textContent = countdown + 's';
+}
+
+refresh();
+ticker = setInterval(tick, 1000);
+</script>
+</body>
+</html>
