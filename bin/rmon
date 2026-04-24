@@ -28,7 +28,7 @@
 
 set -u
 
-VERSION="0.4.4"
+VERSION="0.4.5"
 INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
 DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
 CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"
@@ -732,8 +732,14 @@ cmd_web_start() {
     # 2. uhttpd (Entware) with -x /cgi-bin
     # 3. httpd (BusyBox standalone)
     # 4. BusyBox multi-call
+    #
+    # Entware installs lighttpd to /opt/sbin/ which may not be in PATH;
+    # check the explicit path as fallback.
+    _lighttpd=$(command -v lighttpd 2>/dev/null)
+    [ -z "$_lighttpd" ] && [ -x /opt/sbin/lighttpd ] && _lighttpd=/opt/sbin/lighttpd
+
     _pid=""
-    if command -v lighttpd >/dev/null 2>&1; then
+    if [ -n "$_lighttpd" ]; then
         _conf="$INSTALL_BASE/config/httpd.conf"
         {
             printf 'server.document-root = "%s"\n' "$_web_dir"
@@ -743,7 +749,7 @@ cmd_web_start() {
             printf 'cgi.assign = ( ".cgi" => "/bin/sh" )\n'
             printf 'server.errorlog = "%s/logs/httpd-error.log"\n' "$INSTALL_BASE"
         } > "$_conf"
-        lighttpd -f "$_conf" -D &
+        "$_lighttpd" -f "$_conf" -D &
         _pid=$!
     elif command -v uhttpd >/dev/null 2>&1; then
         uhttpd -f -p "$_port" -h "$_web_dir" -x /cgi-bin &

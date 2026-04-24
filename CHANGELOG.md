@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-04-25
+
+### Fixed
+
+- **`rmon web start`** — lighttpd not found even when installed because Entware puts
+  it in `/opt/sbin/lighttpd` which may not be in PATH. Now checks both `command -v`
+  and the explicit path `/opt/sbin/lighttpd` as fallback.
+- **`install.sh`** — same fix: lighttpd availability check now also tests `/opt/sbin/lighttpd`.
+
 ## [0.4.4] - 2026-04-24
 
 ### Fixed

@@ -240,7 +240,7 @@ else
 fi
 
 # Optional: lighttpd for the web dashboard (CGI support via lighttpd-mod-cgi)
-if command -v lighttpd >/dev/null 2>&1; then
+if command -v lighttpd >/dev/null 2>&1 || [ -x /opt/sbin/lighttpd ]; then
     ok "lighttpd available — web dashboard ready (rmon web start)"
 elif command -v uhttpd >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1; then
     ok "HTTP server available — web dashboard ready (rmon web start)"
