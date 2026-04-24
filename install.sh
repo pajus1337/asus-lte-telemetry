@@ -119,8 +119,39 @@ EOF
 step "Step 1/7: Environment checks"
 
 # -- user / shell ------------------------------------------------------------
-if [ "$(id -u)" != "0" ] && [ "$(whoami)" != "admin" ]; then
-    warn "Not running as root/admin. Some steps may fail."
+# Detect current user. BusyBox on stock ASUS firmware may lack `id` and `whoami`,
+# so we fall back through multiple methods.
+detect_user() {
+    # Try `id -un`
+    if command -v id >/dev/null 2>&1; then
+        id -un 2>/dev/null && return 0
+    fi
+    # Try `whoami`
+    if command -v whoami >/dev/null 2>&1; then
+        whoami 2>/dev/null && return 0
+    fi
+    # Try $USER or $LOGNAME
+    if [ -n "${USER:-}" ]; then
+        echo "$USER" && return 0
+    fi
+    if [ -n "${LOGNAME:-}" ]; then
+        echo "$LOGNAME" && return 0
+    fi
+    # Last resort: read from /proc
+    if [ -r /proc/self/status ]; then
+        uid=$(awk '/^Uid:/ {print $2; exit}' /proc/self/status 2>/dev/null)
+        if [ "$uid" = "0" ]; then
+            echo "root" && return 0
+        fi
+    fi
+    echo "unknown"
+}
+
+CURRENT_USER=$(detect_user)
+if [ "$CURRENT_USER" != "root" ] && [ "$CURRENT_USER" != "admin" ] && [ "$CURRENT_USER" != "unknown" ]; then
+    warn "Running as '$CURRENT_USER' (expected root or admin). Some steps may fail."
+elif [ "$CURRENT_USER" = "unknown" ]; then
+    info "Could not determine current user (no id/whoami). Continuing anyway."
 fi
 
 # -- architecture ------------------------------------------------------------
@@ -224,7 +255,7 @@ if [ "$SCRIPT_DIR" != "$INSTALL_BASE" ]; then
         fi
     done
     # Top-level files
-    for f in README.md LICENSE schema.sql install.sh uninstall.sh; do
+    for f in README.md LICENSE CHANGELOG.md schema.sql install.sh uninstall.sh; do
         [ -f "$SCRIPT_DIR/$f" ] && cp -f "$SCRIPT_DIR/$f" "$INSTALL_BASE/$f"
     done
     ok "Project files copied"
@@ -234,6 +265,7 @@ fi
 
 # -- mark scripts executable -------------------------------------------------
 chmod +x "$INSTALL_BASE/bin/"* 2>/dev/null || true
+chmod +x "$INSTALL_BASE/lib/"*.sh 2>/dev/null || true
 chmod +x "$INSTALL_BASE/install.sh" 2>/dev/null || true
 chmod +x "$INSTALL_BASE/uninstall.sh" 2>/dev/null || true
 
@@ -383,14 +415,19 @@ step "Step 7/7: Smoke test"
 # Test at-send
 if [ -x "$INSTALL_BASE/bin/at-send" ] && [ -c "$AT_PORT" ]; then
     info "Testing AT command to modem..."
-    AT_OUT=$("$INSTALL_BASE/bin/at-send" "ATI" 2 2>&1 || true)
-    if echo "$AT_OUT" | grep -q "OK"; then
-        MODEL=$(echo "$AT_OUT" | grep -E '^EM[0-9]' | head -1 || echo "unknown")
-        REV=$(echo "$AT_OUT" | grep -i "Revision" | head -1 | sed 's/Revision: *//' || echo "unknown")
-        ok "Modem responds: $MODEL ($REV)"
+    # Capture output and normalise line endings (modem uses \r\n)
+    AT_RAW=$("$INSTALL_BASE/bin/at-send" "ATI" 2 2>&1 || true)
+    AT_OUT=$(printf '%s' "$AT_RAW" | tr -d '\r')
+
+    if echo "$AT_OUT" | grep -q "^OK$\|^OK "; then
+        MODEL=$(echo "$AT_OUT" | grep -E '^EM[0-9]+' | head -1)
+        REV=$(echo "$AT_OUT" | grep -i "Revision:" | head -1 | sed 's/.*Revision: *//')
+        [ -z "$MODEL" ] && MODEL="unknown"
+        [ -z "$REV" ] && REV="unknown"
+        ok "Modem responds: $MODEL (firmware: $REV)"
     else
-        warn "AT command did not return OK. Output:"
-        echo "$AT_OUT" | sed 's/^/    /'
+        warn "AT command did not return OK. Raw output:"
+        echo "$AT_RAW" | sed 's/^/    /'
     fi
 fi
 
@@ -399,6 +436,17 @@ if /opt/bin/sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM meta;" >/dev/null 2>&1; the
     ok "Database read test passed"
 else
     warn "Database read test failed"
+fi
+
+# Test collector (quick single run)
+if [ -x "$INSTALL_BASE/bin/collector-lte.sh" ] && [ -c "$AT_PORT" ]; then
+    info "Running a test LTE collection cycle..."
+    if /bin/sh "$INSTALL_BASE/bin/collector-lte.sh" >/dev/null 2>&1; then
+        LTE_COUNT=$(/opt/bin/sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM lte_samples;" 2>/dev/null)
+        ok "LTE collector test passed (${LTE_COUNT} samples in DB)"
+    else
+        warn "LTE collector test failed (check logs for details)"
+    fi
 fi
 
 # =============================================================================

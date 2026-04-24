@@ -1,0 +1,49 @@
+feat: data collection layer (v0.2.0)
+
+Libraries:
+- lib/common.sh: levelled logging (file + stderr), log rotation, atomic
+  mkdir locking with stale-lock detection, trap-based cleanup, die(),
+  check_dependency(), now_epoch(), is_integer()
+- lib/config.sh: INI parser (cfg_get/cfg_get_int/cfg_get_bool), atomic
+  writer (cfg_set via awk+tmpfile+mv), load_sampling_config() for
+  mode-based interval loading from [mode.*] sections
+- lib/db.sh: SQLite wrappers (db_exec/db_query/db_scalar/db_transaction),
+  collector_state tracking with status+error, retention purge across all
+  sample tables, VACUUM, db_check health verification
+- lib/at.sh: AT command wrapper + response parsers for QENG servingcell,
+  COPS, QNWINFO, QRSRP, QCAINFO, neighbourcell, QTEMP (8 sensors),
+  QGDCNT, CGCONTRDP; batch runner collect_all_at()
+
+Collectors:
+- bin/collector-lte.sh: full AT collection → lte_samples (with raw_qeng),
+  ca_samples (FK), neighbour_cells (FK), temp_samples, modem_counters,
+  pdp_context (change-only insert); hex→dec cell_id conversion
+- bin/collector-system.sh: /proc parsing for uptime, load (1/5/15min),
+  memory, swap, disk %, CPU temp, wwan0 byte counters and error/drop
+  stats; process health checks (quectel-CM, dnsmasq, httpd, smbd, crond)
+- bin/collector-ping.sh: multi-target from config with label|address|count
+  format, gateway keyword auto-resolution, BusyBox-compatible RTT parsing
+- bin/collector-vnstat.sh: --oneline parsing, stored as event snapshot
+
+Dispatcher (bin/dispatcher.sh):
+- mode-based scheduling from [mode.*] config intervals
+- per-collector interval tracking via collector_state table
+- auto-switch: night mode on time window, debug mode on SINR drop
+  (consecutive threshold) or cell change, linger timeout for recovery
+- event detection: cell_change, scc_drop, scc_up, sinr_low, ping_loss,
+  rrc_disconnect, reboot (uptime reset)
+- daily retention purge, configurable VACUUM interval
+- log rotation on configurable max file size
+- state files in state/ directory
+
+Other changes:
+- install.sh: chmod lib/*.sh, CHANGELOG.md in copy list, LTE collector
+  smoke test added to step 7
+- bin/rmon: version bumped to 0.2.0
+- README.md, lib/README.md, bin/README.md updated
+
+All code POSIX sh (#!/bin/sh), BusyBox 1.25.1 compatible, all timestamps
+as unix epoch INTEGER matching schema.sql, all column names verified
+against v0.1 schema including FK references.
+
+Tested on ASUS 4G-AC86U + Quectel EM12-G (stock firmware)

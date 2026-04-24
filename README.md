@@ -63,7 +63,7 @@ cd asus-lte-telemetry
 sh install.sh
 ```
 
-**Option B — scp from your workstation** (recommended for v0.1):
+**Option B — scp from your workstation**:
 
 ```sh
 # On your PC:
@@ -75,7 +75,7 @@ cd /tmp/mnt/System/asus-lte-telemetry
 sh install.sh
 ```
 
-**Option C — single-file bootstrap** (planned for v0.2, not yet available).
+**Option C — single-file bootstrap** (planned for v0.5).
 
 The installer will:
 
@@ -145,7 +145,10 @@ See `docs/ARCHITECTURE.md` for a detailed breakdown. In short:
 
 ## Project status
 
-Actively developed. Breaking changes may occur before v1.0.
+**v0.2.0** — data collection layer complete and ready for testing.
+Collectors, dispatcher, auto-switch, and event detection are implemented.
+Dashboard and advanced CLI features are planned for v0.3–v0.4.
+Breaking changes may occur before v1.0.
 
 ## License
 

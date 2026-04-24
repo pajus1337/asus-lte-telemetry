@@ -3,13 +3,10 @@
 # rmon: User-facing CLI for asus-lte-telemetry
 # =============================================================================
 #
-# This is a skeleton v0.1. Full implementation lands in v0.2 along with the
-# library functions and collectors it depends on.
-#
 # Usage:
 #   rmon <command> [args]
 #
-# Commands (some placeholders for v0.2):
+# Commands:
 #   status                   Show current collection state and last run times
 #   tail <metric> [count]    Show last N samples (metric = lte|system|ping|ca)
 #   mode [name]              Get or set sampling mode (normal|debug|night)
@@ -17,6 +14,7 @@
 #   db info                  Show database stats
 #   db reset                 Wipe database (with confirmation + backup)
 #   db purge --older-than D  Remove samples older than D days
+#   db vacuum                Reclaim disk space
 #   events [count]           Show recent detected events
 #   help                     Show this help
 #   version                  Show version
@@ -24,7 +22,7 @@
 
 set -u
 
-VERSION="0.1.0"
+VERSION="0.2.0"
 INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
 DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
 CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"

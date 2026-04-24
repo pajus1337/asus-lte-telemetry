@@ -7,6 +7,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-24
+
+### Added — Data collection layer
+
+#### Libraries (`lib/`)
+- **`lib/common.sh`** — shared utilities
+  - Logging with levels (debug/info/warning/error), file + stderr output
+  - Log rotation (configurable max size, keeps last 2 rotated files)
+  - Locking via atomic `mkdir` (BusyBox-safe, no flock dependency)
+  - Stale lock detection (PID liveness check + age timeout)
+  - Trap helper for automatic lock cleanup on exit/signal
+  - `die()`, `check_dependency()`, `now_epoch()`, `is_integer()`
+
+- **`lib/config.sh`** — INI file parser
+  - `cfg_get SECTION KEY [DEFAULT]` — read values with inline comment stripping
+  - `cfg_get_int`, `cfg_get_bool` — typed getters with validation
+  - `cfg_set SECTION KEY VALUE` — atomic write (awk → tmpfile → mv)
+  - `load_sampling_config()` — populates all interval globals from current mode
+  - Supports dotted section names (`[mode.normal]`), `=` in values
+
+- **`lib/db.sh`** — SQLite helpers
+  - `db_exec`, `db_query`, `db_scalar`, `db_query_csv` — query wrappers
+  - `db_escape`, `db_quote` — SQL string escaping
+  - `db_transaction` — BEGIN/COMMIT wrapper with rollback on failure
+  - `db_update_collector_state` / `db_seconds_since_last_run` — scheduler support
+  - `db_purge_old DAYS` — retention across all sample tables
+  - `db_vacuum`, `db_check` — maintenance and health verification
+  - `db_last_insert_rowid` — for FK references (ca_samples, neighbour_cells)
+
+- **`lib/at.sh`** — AT command response parsers
+  - `at_cmd COMMAND [TIMEOUT]` — wrapper around `at-send` with error detection
+  - `parse_qeng_serving` — serving cell (rrc_state, rat, duplex, mcc, mnc,
+    cell_id_hex, pci, earfcn, band, rsrp, rsrq, rssi, sinr, cqi, tx_power)
+  - `parse_cops` — operator name
+  - `parse_qnwinfo` — network type (FDD LTE, etc.)
+  - `parse_qrsrp` — per-antenna RSRP (RX0–RX3)
+  - `parse_qcainfo` — carrier aggregation (PCC + SCCs with per-CC metrics)
+  - `parse_neighbours` — intra/inter-freq neighbour cells
+  - `parse_qtemp` — 8 modem thermal sensors (mapped to schema column names)
+  - `parse_qgdcnt` — modem byte counters (TX/RX)
+  - `parse_cgcontrdp` — PDP context (CID, APN, WAN IP, DNS)
+  - `collect_all_at()` — batch runner for all AT commands
+
+#### Collectors (`bin/`)
+- **`bin/collector-lte.sh`** — LTE telemetry collector
+  - Runs all AT commands via `collect_all_at()`
+  - Inserts into: `lte_samples` (with `raw_qeng` for forensics), `ca_samples`
+    (FK to lte_samples), `neighbour_cells` (FK), `temp_samples`, `modem_counters`
+  - Change-only insert for `pdp_context` (new row only when WAN IP changes)
+  - Hex→decimal cell_id conversion
+
+- **`bin/collector-system.sh`** — system metrics collector
+  - `/proc/meminfo` parsing (free/used/total, swap)
+  - `/proc/loadavg` (1/5/15 min), `/proc/uptime`
+  - Disk usage for system and data partitions (percentage)
+  - CPU temperature from `/sys/class/thermal` (if available)
+  - wwan0 byte counters + error/drop counters from `/proc/net/dev`
+  - Process health checks: quectel-CM, dnsmasq, httpd, smbd, crond
+  - BusyBox-compatible `ps` grep (no `-C` flag)
+
+- **`bin/collector-ping.sh`** — multi-target ping collector
+  - Parses config `[ping] targets` multi-line format (label|address|count)
+  - Gateway keyword auto-resolves to current default gateway
+  - BusyBox ping compatible parsing (sent, received, loss_pct, RTT min/avg/max/mdev)
+
+- **`bin/collector-vnstat.sh`** — vnstat traffic snapshot
+  - `--oneline` parsing (day/month/total rx/tx)
+  - Stores as event with severity=info for schema flexibility
+
+#### Dispatcher (`bin/dispatcher.sh`)
+- Mode-based scheduling (reads `[mode.*]` intervals from config)
+- Per-collector interval tracking via `collector_state` table
+- **Auto-switch logic:**
+  - Night mode: automatic during configured `night_hours_start`/`night_hours_end`
+  - Debug mode: on SINR drop below threshold for N consecutive samples
+  - Debug mode: on cell change (`cell_id_hex` change) with configurable linger
+  - Auto-recovery: back to normal after `debug_linger_sec` timeout
+- **Event detection (7 types):**
+  - `cell_change` — serving cell ID changed
+  - `scc_drop` / `scc_up` — SCC disappeared/reappeared
+  - `sinr_low` — sustained low SINR
+  - `ping_loss` — average packet loss above threshold
+  - `rrc_disconnect` — NOCONN state with active wwan0 interface
+  - `reboot` — uptime reset detected
+- **Retention:** daily purge (configurable days), VACUUM on configurable interval
+- **Log rotation:** automatic on configurable max file size
+- State tracking files in `state/` directory (persistent across reboots)
+
+### Changed
+- `bin/rmon` version bumped to 0.2.0, header updated
+- `lib/README.md` updated with actual library descriptions
+- `bin/README.md` updated with all v0.2 scripts
+
+### Technical notes
+- All code POSIX sh compatible (`#!/bin/sh`), tested against BusyBox 1.25.1
+- All timestamps stored as unix epoch INTEGER (matching schema.sql)
+- All column names match schema.sql exactly (verified against v0.1 schema)
+- Foreign keys used: ca_samples.sample_id → lte_samples.id,
+  neighbour_cells.sample_id → lte_samples.id
+- collector_state updated with status (ok/error/skipped) and error messages
+- Temporary files cleaned via trap handlers
+- No bash/dash/zsh dependencies, integer-only sleep
+
+## [0.1.1] - 2026-04-22
+
+### Fixed
+- Installer user detection no longer fails when `id` and `whoami` are missing
+  from BusyBox (fallback chain: id → whoami → $USER → /proc/self/status)
+- Smoke test no longer garbles modem output; CR/LF from AT responses is
+  now normalised before parsing
+- Modem identification in smoke test now correctly extracts model and firmware
+
+### Added
+- `.gitattributes` with LF line endings for shell scripts, configs, SQL, docs
+- `.gitignore` excluding runtime directories and user config from git
+
 ## [0.1.0] - 2026-04-22
 
 ### Added

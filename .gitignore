@@ -1,30 +1,51 @@
-﻿# Generated at install / runtime
+# Runtime directories (created by install.sh)
 db/
 logs/
 backups/
 state/
-config/config.ini
 
-# But keep the example
+# User-specific config (template kept in example file)
+config/config.ini
 !config/config.ini.example
 
-# OS junk
-.DS_Store
-Thumbs.db
-*~
-*.swp
-*.swo
+# SQLite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
-# Temp files
-/tmp/*
-*.tmp
+# Logs
+*.log
 
-# Archives (distribute via GitHub Releases, not git)
+# Archives (distribute via GitHub Releases, not git history)
+*.tar
 *.tar.gz
 *.tgz
 *.zip
 
-# Editor configs
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor state
+*~
+*.swp
+*.swo
+*.bak
 .vscode/
 .idea/
-*.sublime-*
+*.sublime-project
+*.sublime-workspace
+
+# Test artifacts
+/tmp/
+test-*.db
+
+# Compiled / cached
+__pycache__/
+*.pyc
+
+# Others
+.claude/
+CLAUDE.md

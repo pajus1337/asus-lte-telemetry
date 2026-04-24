@@ -1,14 +1,15 @@
 # bin/ — executable scripts
 
-Currently contains:
+- `at-send` — AT command helper for Quectel EM12-G (v0.1)
+- `rmon` — user-facing CLI: status, tail, mode, events, db, export (v0.2)
+- `dispatcher.sh` — cron orchestrator with dynamic sampling and auto-switch (v0.2)
+- `collector-lte.sh` — LTE telemetry collector: servingcell, CA, neighbours, temps (v0.2)
+- `collector-system.sh` — system metrics: load, RAM, SWAP, disk, wwan0, processes (v0.2)
+- `collector-ping.sh` — multi-target ping: RTT, loss, gateway auto-detect (v0.2)
+- `collector-vnstat.sh` — vnstat traffic snapshots (v0.2)
 
-- `at-send` — AT command helper (v0.1)
-- `rmon` — user-facing CLI (v0.1 skeleton; full functionality in v0.2)
+Planned for v0.3–v0.4:
 
-Planned for v0.2–v0.3:
-
-- `dispatcher.sh` — cron orchestrator
-- `collector-lte.sh` — LTE metrics collector
-- `collector-system.sh` — system metrics collector
-- `collector-ping.sh` — network quality collector
-- `collector-vnstat.sh` — traffic stats collector
+- `rmon tail lte --follow` (live tail)
+- `rmon plot` (ASCII charts)
+- `web/api.sh` (CGI → JSON for dashboard)

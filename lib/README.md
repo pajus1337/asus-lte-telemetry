@@ -1,9 +1,13 @@
 # lib/ — shared shell libraries
 
-This directory contains shell functions sourced by the collectors and
-dispatcher. Files will be added in v0.2:
+Sourced by collectors and dispatcher. Never executed directly.
 
-- `common.sh` — logging, locking, error handling
-- `config.sh` — INI parser
-- `db.sh` — SQLite helpers
-- `at.sh` — AT response parsers (QENG, QCAINFO, QRSRP, etc.)
+- `common.sh` — logging (levelled, to file + stderr), locking (atomic mkdir,
+  stale-lock detection, trap cleanup), error handling (`die`, `check_dependency`)
+- `config.sh` — INI parser (`cfg_get`, `cfg_get_int`, `cfg_get_bool`),
+  atomic INI writer (`cfg_set`), sampling config loader
+- `db.sh` — SQLite helpers (`db_exec`, `db_query`, `db_scalar`,
+  `db_transaction`), collector state tracking, retention purge, VACUUM
+- `at.sh` — AT command wrapper and response parsers for all Quectel EM12-G
+  commands: QENG servingcell, COPS, QNWINFO, QRSRP, QCAINFO, neighbourcell,
+  QTEMP, QGDCNT, CGCONTRDP

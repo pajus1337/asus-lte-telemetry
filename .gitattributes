@@ -1,3 +1,45 @@
-﻿* text=auto
-*.sh text eol=lf
-*.bash text eol=lf
+# Normalize line endings across platforms (Windows/Linux/macOS)
+# https://git-scm.com/docs/gitattributes
+
+# Default: auto-detect text files
+* text=auto
+
+# Shell scripts MUST use LF (or they won't execute on Linux)
+*.sh       text eol=lf
+*.bash     text eol=lf
+
+# Config files use LF
+*.ini      text eol=lf
+*.conf     text eol=lf
+*.cfg      text eol=lf
+
+# SQL files use LF
+*.sql      text eol=lf
+
+# Documentation uses LF
+*.md       text eol=lf
+*.txt      text eol=lf
+LICENSE    text eol=lf
+
+# Web files use LF
+*.html     text eol=lf
+*.css      text eol=lf
+*.js       text eol=lf
+
+# Python uses LF
+*.py       text eol=lf
+
+# Scripts without extension (CLI binaries like 'rmon', 'at-send')
+bin/*      text eol=lf
+
+# Binary files (don't touch line endings)
+*.png      binary
+*.jpg      binary
+*.gif      binary
+*.ico      binary
+*.db       binary
+*.sqlite   binary
+*.tar      binary
+*.tar.gz   binary
+*.tgz      binary
+*.zip      binary
