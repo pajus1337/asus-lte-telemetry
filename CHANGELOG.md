@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-04-24
+
+### Fixed
+
+- **`rmon web start`** — switch from `uhttpd` (not in Entware aarch64-k3.10) to
+  `lighttpd` + `lighttpd-mod-cgi`. Generates a minimal `config/httpd.conf` on the
+  fly (document-root, port, bind, mod_cgi, cgi.assign for `.cgi` files) and launches
+  `lighttpd -f config -D` in foreground. Detection order: lighttpd → uhttpd → httpd
+  → BusyBox multi-call.
+- **`install.sh`** — optional HTTP server step now installs `lighttpd lighttpd-mod-cgi`
+  instead of non-existent `uhttpd`. Checks for existing lighttpd/uhttpd/httpd before
+  prompting.
+
 ## [0.4.3] - 2026-04-24
 
 ### Fixed

@@ -28,7 +28,7 @@
 
 set -u
 
-VERSION="0.4.3"
+VERSION="0.4.4"
 INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
 DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
 CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"
@@ -727,10 +727,25 @@ cmd_web_start() {
 
     chmod +x "$_web_dir/cgi-bin/"*.cgi 2>/dev/null || true
 
-    # Launch HTTP server — try in order: uhttpd (Entware), httpd (BusyBox standalone),
-    # BusyBox multi-call. uhttpd needs -x /cgi-bin to execute CGI scripts.
+    # Launch HTTP server — try in order:
+    # 1. lighttpd (Entware) with generated config + mod_cgi
+    # 2. uhttpd (Entware) with -x /cgi-bin
+    # 3. httpd (BusyBox standalone)
+    # 4. BusyBox multi-call
     _pid=""
-    if command -v uhttpd >/dev/null 2>&1; then
+    if command -v lighttpd >/dev/null 2>&1; then
+        _conf="$INSTALL_BASE/config/httpd.conf"
+        {
+            printf 'server.document-root = "%s"\n' "$_web_dir"
+            printf 'server.port = %s\n'             "$_port"
+            printf 'server.bind = "0.0.0.0"\n'
+            printf 'server.modules = ( "mod_cgi" )\n'
+            printf 'cgi.assign = ( ".cgi" => "/bin/sh" )\n'
+            printf 'server.errorlog = "%s/logs/httpd-error.log"\n' "$INSTALL_BASE"
+        } > "$_conf"
+        lighttpd -f "$_conf" -D &
+        _pid=$!
+    elif command -v uhttpd >/dev/null 2>&1; then
         uhttpd -f -p "$_port" -h "$_web_dir" -x /cgi-bin &
         _pid=$!
     elif command -v httpd >/dev/null 2>&1; then
@@ -748,7 +763,7 @@ cmd_web_start() {
 
     if [ -z "$_pid" ]; then
         printf 'ERROR: No HTTP server found.\n' >&2
-        printf 'Install one with: opkg install uhttpd\n' >&2
+        printf 'Install with: opkg install lighttpd lighttpd-mod-cgi\n' >&2
         return 1
     fi
     echo "$_pid" > "$_web_pid_file"

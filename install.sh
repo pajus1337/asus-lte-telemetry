@@ -239,19 +239,20 @@ else
     fi
 fi
 
-# Optional: uhttpd for the web dashboard (Entware's OpenWrt HTTP server with CGI)
-if command -v uhttpd >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1; then
+# Optional: lighttpd for the web dashboard (CGI support via lighttpd-mod-cgi)
+if command -v lighttpd >/dev/null 2>&1; then
+    ok "lighttpd available — web dashboard ready (rmon web start)"
+elif command -v uhttpd >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1; then
     ok "HTTP server available — web dashboard ready (rmon web start)"
 else
-    info "Web dashboard requires an HTTP server with CGI support."
-    info "Recommended: uhttpd (Entware, ~50 KB, OpenWrt-native, CGI built in)"
-    if ask_yn "Install uhttpd now?" default_y; then
+    info "Web dashboard requires lighttpd with CGI support."
+    if ask_yn "Install lighttpd and lighttpd-mod-cgi?" default_y; then
         /opt/bin/opkg update >/dev/null 2>&1 || true
-        /opt/bin/opkg install uhttpd \
-            && ok "uhttpd installed — start dashboard with: rmon web start" \
-            || warn "uhttpd install failed; try manually: opkg install uhttpd"
+        /opt/bin/opkg install lighttpd lighttpd-mod-cgi \
+            && ok "lighttpd installed — start dashboard with: rmon web start" \
+            || warn "Install failed; try manually: opkg install lighttpd lighttpd-mod-cgi"
     else
-        info "Skipped. Install later with: opkg install uhttpd"
+        info "Skipped. Install later with: opkg install lighttpd lighttpd-mod-cgi"
     fi
 fi
 
