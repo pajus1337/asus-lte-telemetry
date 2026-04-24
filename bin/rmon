@@ -7,26 +7,30 @@
 #   rmon <command> [args]
 #
 # Commands:
-#   status                   Show current collection state and last run times
-#   tail <metric> [count]    Show last N samples (metric = lte|system|ping|ca)
-#   mode [name]              Get or set sampling mode (normal|debug|night)
-#   export [--last <dur>]    Export recent data to CSV
-#   db info                  Show database stats
-#   db reset                 Wipe database (with confirmation + backup)
-#   db purge --older-than D  Remove samples older than D days
-#   db vacuum                Reclaim disk space
-#   events [count]           Show recent detected events
-#   help                     Show this help
-#   version                  Show version
+#   status                       Collector state, DB size, last run times
+#   tail <metric> [N] [--follow [sec]]
+#                                Last N samples; --follow polls every sec (default 5)
+#                                metrics: lte | system | ping | ca | events
+#   plot [metric] [N]            ASCII chart of last N samples (default: rsrp, 40)
+#                                metrics: rsrp | sinr | rsrq | rssi
+#   diag                         Modem info, signal, config, recent errors
+#   mode [name]                  Get or set sampling mode (normal|debug|night)
+#   export [--last <dur>]        Export CSV to stdout (--last 24h or --last 7d)
+#   events [N]                   Last N events (default: 20)
+#   db info                      Row counts, time range, file size
+#   db reset                     Wipe database (creates backup, prompts confirmation)
+#   db purge --older-than <N>d   Delete samples older than N days
+#   db vacuum                    Reclaim disk space
+#   version                      Show version
+#   help                         This help
 # =============================================================================
 
 set -u
 
-VERSION="0.2.0"
+VERSION="0.3.0"
 INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
 DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
 CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"
-
 SQLITE=/opt/bin/sqlite3
 
 # ---------------------------------------------------------------------------
@@ -40,27 +44,33 @@ rmon ${VERSION} — asus-lte-telemetry CLI
 Usage: rmon <command> [args]
 
 Commands:
-  status                     Show collector state and last run times
-  tail <metric> [count]      Show last N samples (default: 10)
-                             metrics: lte | system | ping | ca | events
-  mode [name]                Get or set sampling mode
-  export [--last <dur>]      Export data (e.g. --last 24h, --last 7d)
-  events [count]             Show recent events
-  db info                    Database size, row counts, oldest/newest sample
-  db reset                   Wipe database (with backup + confirmation)
-  db purge --older-than D    Remove samples older than D days
-  version                    Show version
-  help                       This help
+  status                       Collector state, DB size, last run times
+  tail <metric> [N] [--follow [sec]]
+                               Last N samples; --follow polls every sec (default 5)
+                               metrics: lte | system | ping | ca | events
+  plot [metric] [N]            ASCII chart of last N samples (default: rsrp, 40)
+                               metrics: rsrp | sinr | rsrq | rssi
+  diag                         Modem info, signal, config, recent errors
+  mode [name]                  Get or set sampling mode (normal|debug|night)
+  export [--last <dur>]        Export CSV to stdout (--last 24h or --last 7d)
+  events [N]                   Last N events (default: 20)
+  db info                      Row counts, time range, file size
+  db reset                     Wipe database (backup + confirmation)
+  db purge --older-than <N>d   Delete samples older than N days
+  db vacuum                    Reclaim disk space
+  version                      Show version
+  help                         This help
 
 Examples:
   rmon status
   rmon tail lte 20
+  rmon tail lte --follow
+  rmon tail lte 5 --follow 10
+  rmon plot sinr 60
+  rmon diag
   rmon mode debug
-  rmon export --last 24h > lte-last24h.csv
+  rmon export --last 24h > dump.csv
   rmon db purge --older-than 30d
-
-Full documentation:
-  https://github.com/pajus1337/asus-lte-telemetry
 
 EOF
 }
@@ -78,67 +88,243 @@ check_db() {
     fi
 }
 
+# Human-readable byte size
+fmt_bytes() {
+    awk -v n="$1" 'BEGIN {
+        if      (n >= 1073741824) printf "%.1f GB", n / 1073741824
+        else if (n >= 1048576)    printf "%.1f MB", n / 1048576
+        else if (n >= 1024)       printf "%.1f KB", n / 1024
+        else                      printf "%d B",    n
+        exit
+    }'
+}
+
+# Relative age of a unix timestamp: "2m ago", "never"
+fmt_age() {
+    _now=$(/opt/bin/date +%s)
+    awk -v ts="$1" -v now="$_now" 'BEGIN {
+        if (ts + 0 == 0) { print "never"; exit }
+        d = now - ts
+        if (d < 0) d = 0
+        if      (d < 60)    printf "%ds ago",              d
+        else if (d < 3600)  printf "%dm ago",               int(d / 60)
+        else if (d < 86400) printf "%dh %dm ago",           int(d / 3600), int((d % 3600) / 60)
+        else                printf "%dd %dh ago",           int(d / 86400), int((d % 86400) / 3600)
+        exit
+    }'
+}
+
+# Signal quality label for RSRP (dBm)
+label_rsrp() {
+    awk -v v="$1" 'BEGIN {
+        v = v + 0
+        if      (v >= -80)  print "Excellent"
+        else if (v >= -90)  print "Good"
+        else if (v >= -100) print "Fair"
+        else if (v >= -110) print "Poor"
+        else                print "Very poor"
+        exit
+    }'
+}
+
+# Signal quality label for SINR (dB)
+label_sinr() {
+    awk -v v="$1" 'BEGIN {
+        v = v + 0
+        if      (v >= 20) print "Excellent"
+        else if (v >= 13) print "Good"
+        else if (v >= 0)  print "Fair"
+        else              print "Poor"
+        exit
+    }'
+}
+
 # ---------------------------------------------------------------------------
 # command: status
 # ---------------------------------------------------------------------------
 cmd_status() {
     check_db
-    echo "=== asus-lte-telemetry status ==="
-    echo ""
-    echo "Database:    $DB_PATH"
-    DB_SIZE=$(wc -c < "$DB_PATH" 2>/dev/null || echo "?")
-    echo "DB size:     $DB_SIZE bytes"
-    echo ""
-    echo "Collector state:"
-    "$SQLITE" -header -column "$DB_PATH" \
-        "SELECT collector_name, datetime(last_run_ts, 'unixepoch', 'localtime') AS last_run, last_status, last_error FROM collector_state ORDER BY collector_name;"
-    echo ""
-    echo "Latest samples per metric:"
-    "$SQLITE" -header -column "$DB_PATH" \
-        "SELECT 'lte'    AS metric, COUNT(*) AS count, datetime(MAX(ts),'unixepoch','localtime') AS newest FROM lte_samples
-         UNION ALL SELECT 'system', COUNT(*), datetime(MAX(ts),'unixepoch','localtime') FROM system_samples
-         UNION ALL SELECT 'ping',   COUNT(*), datetime(MAX(ts),'unixepoch','localtime') FROM ping_samples
-         UNION ALL SELECT 'events', COUNT(*), datetime(MAX(ts),'unixepoch','localtime') FROM events;"
+
+    db_size=$(wc -c < "$DB_PATH" 2>/dev/null || echo 0)
+    db_size_fmt=$(fmt_bytes "$db_size")
+
+    mode="unknown"
+    if [ -f "$CONFIG_FILE" ]; then
+        mode=$(grep -E '^[[:space:]]*mode[[:space:]]*=' "$CONFIG_FILE" 2>/dev/null \
+               | head -1 | sed 's/.*=[[:space:]]*//' | tr -d '[:space:]')
+    fi
+
+    printf "=== asus-lte-telemetry status ===\n\n"
+    printf "Database:  %s  (%s)\n" "$DB_PATH" "$db_size_fmt"
+    printf "Mode:      %s\n\n" "${mode:-unknown}"
+
+    printf "Collectors:\n"
+    "$SQLITE" "$DB_PATH" \
+        "SELECT collector_name, last_run_ts, last_status, COALESCE(last_error,'')
+         FROM collector_state ORDER BY collector_name;" | \
+    while IFS='|' read -r cname cts cstatus cerr; do
+        cage=$(fmt_age "${cts:-0}")
+        if [ -n "$cerr" ]; then
+            printf "  %-10s  %-14s  [%s]  %s\n" "$cname" "$cage" "$cstatus" "$cerr"
+        else
+            printf "  %-10s  %-14s  [%s]\n" "$cname" "$cage" "$cstatus"
+        fi
+    done
+
+    printf "\nSamples:\n"
+    "$SQLITE" "$DB_PATH" \
+        "SELECT 'lte',    COUNT(*), COALESCE(MAX(ts),0) FROM lte_samples
+         UNION ALL SELECT 'system', COUNT(*), COALESCE(MAX(ts),0) FROM system_samples
+         UNION ALL SELECT 'ping',   COUNT(*), COALESCE(MAX(ts),0) FROM ping_samples
+         UNION ALL SELECT 'events', COUNT(*), COALESCE(MAX(ts),0) FROM events;" | \
+    while IFS='|' read -r mname mcount mts; do
+        mage=$(fmt_age "${mts:-0}")
+        printf "  %-10s  %5d rows  %s\n" "$mname" "$mcount" "$mage"
+    done
 }
 
 # ---------------------------------------------------------------------------
-# command: tail
+# command: tail (internal renderer)
 # ---------------------------------------------------------------------------
-cmd_tail() {
-    check_db
-    metric="${1:-lte}"
-    count="${2:-10}"
+_render_tail() {
+    _metric="$1"
+    _count="$2"
 
-    case "$metric" in
+    case "$_metric" in
         lte)
-            "$SQLITE" -header -column "$DB_PATH" \
-                "SELECT datetime(ts,'unixepoch','localtime') AS time, rat, band, rsrp, rsrq, sinr, cell_id_hex, pci
-                 FROM lte_samples ORDER BY ts DESC LIMIT $count;"
+            "$SQLITE" "$DB_PATH" \
+                "SELECT datetime(ts,'unixepoch','localtime'), rat, band,
+                        rsrp, rsrq, sinr, cell_id_hex, pci
+                 FROM lte_samples ORDER BY ts DESC LIMIT $_count;" | \
+            awk 'BEGIN {
+                FS = "|"
+                printf "%-20s  %-5s  %-5s  %5s  %5s  %5s  %-10s  %4s  %-9s\n",
+                    "time","rat","band","rsrp","rsrq","sinr","cell","pci","quality"
+                printf "%-20s  %-5s  %-5s  %5s  %5s  %5s  %-10s  %4s  %-9s\n",
+                    "--------------------","-----","-----","-----","-----","-----",
+                    "----------","----","---------"
+            }
+            {
+                rsrp = $4 + 0
+                if      (rsrp >= -80)  q = "Excellent"
+                else if (rsrp >= -90)  q = "Good"
+                else if (rsrp >= -100) q = "Fair"
+                else if (rsrp >= -110) q = "Poor"
+                else                   q = "Very poor"
+                printf "%-20s  %-5s  B%-4s  %5d  %5d  %5d  %-10s  %4s  %-9s\n",
+                    $1, $2, $3, $4+0, $5+0, $6+0, $7, $8, q
+            }'
             ;;
         system)
-            "$SQLITE" -header -column "$DB_PATH" \
-                "SELECT datetime(ts,'unixepoch','localtime') AS time, load_1min, mem_used_kb, swap_used_kb, uptime_sec
-                 FROM system_samples ORDER BY ts DESC LIMIT $count;"
+            "$SQLITE" "$DB_PATH" \
+                "SELECT datetime(ts,'unixepoch','localtime'),
+                        load_1min, mem_used_kb, swap_used_kb, uptime_sec
+                 FROM system_samples ORDER BY ts DESC LIMIT $_count;" | \
+            awk 'BEGIN {
+                FS = "|"
+                printf "%-20s  %6s  %9s  %9s  %s\n",
+                    "time","load","mem_used","swap_used","uptime"
+                printf "%-20s  %6s  %9s  %9s  %s\n",
+                    "--------------------","------","---------","---------","------"
+            }
+            {
+                up = $5 + 0
+                d = int(up / 86400); h = int((up % 86400) / 3600); m = int((up % 3600) / 60)
+                if      (d > 0) upstr = sprintf("%dd %dh", d, h)
+                else if (h > 0) upstr = sprintf("%dh %dm",  h, m)
+                else            upstr = sprintf("%dm",       m)
+                printf "%-20s  %6s  %6d KB  %6d KB  %s\n",
+                    $1, $2, $3+0, $4+0, upstr
+            }'
             ;;
         ping)
-            "$SQLITE" -header -column "$DB_PATH" \
-                "SELECT datetime(ts,'unixepoch','localtime') AS time, target_label, loss_pct, rtt_avg_ms
-                 FROM ping_samples ORDER BY ts DESC LIMIT $count;"
+            "$SQLITE" "$DB_PATH" \
+                "SELECT datetime(ts,'unixepoch','localtime'),
+                        target_label, loss_pct, rtt_avg_ms, rtt_min_ms, rtt_max_ms
+                 FROM ping_samples ORDER BY ts DESC LIMIT $_count;" | \
+            awk 'BEGIN {
+                FS = "|"
+                printf "%-20s  %-16s  %5s  %8s  %8s  %8s\n",
+                    "time","target","loss%","avg_ms","min_ms","max_ms"
+                printf "%-20s  %-16s  %5s  %8s  %8s  %8s\n",
+                    "--------------------","----------------","-----","--------","--------","--------"
+            }
+            {
+                printf "%-20s  %-16s  %5s  %8s  %8s  %8s\n",
+                    $1, $2, $3, $4, $5, $6
+            }'
             ;;
         ca)
-            "$SQLITE" -header -column "$DB_PATH" \
-                "SELECT datetime(ts,'unixepoch','localtime') AS time, cc_type, band, bandwidth, rsrp, sinr
-                 FROM ca_samples ORDER BY ts DESC LIMIT $count;"
+            "$SQLITE" "$DB_PATH" \
+                "SELECT datetime(ts,'unixepoch','localtime'),
+                        cc_type, band, bandwidth, rsrp, sinr, scc_state
+                 FROM ca_samples ORDER BY ts DESC LIMIT $_count;" | \
+            awk 'BEGIN {
+                FS = "|"
+                printf "%-20s  %-4s  %-5s  %-5s  %5s  %5s  %-8s\n",
+                    "time","type","band","bw","rsrp","sinr","state"
+                printf "%-20s  %-4s  %-5s  %-5s  %5s  %5s  %-8s\n",
+                    "--------------------","----","-----","-----","-----","-----","--------"
+            }
+            {
+                printf "%-20s  %-4s  B%-4s  %-5s  %5s  %5s  %-8s\n",
+                    $1, $2, $3, $4, $5, $6, $7
+            }'
             ;;
         events)
-            cmd_events "$count"
+            cmd_events "$_count"
             ;;
         *)
-            echo "Unknown metric: $metric" >&2
+            echo "Unknown metric: $_metric" >&2
             echo "Valid: lte | system | ping | ca | events" >&2
             exit 1
             ;;
     esac
+}
+
+cmd_tail() {
+    check_db
+    follow=0
+    follow_sec=5
+    metric=""
+    count=10
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --follow|-f)
+                follow=1; shift
+                case "${1:-}" in [0-9]*) follow_sec="$1"; shift ;; esac
+                ;;
+            -*)
+                echo "Unknown option: $1" >&2; exit 1
+                ;;
+            *)
+                if [ -z "$metric" ]; then
+                    metric="$1"
+                else
+                    case "$1" in
+                        [0-9]*) count="$1" ;;
+                        *) echo "Unknown argument: $1" >&2; exit 1 ;;
+                    esac
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    metric="${metric:-lte}"
+
+    if [ "$follow" = "1" ]; then
+        while true; do
+            printf '\033[2J\033[H'
+            printf "rmon tail %s — live (every %ss, Ctrl-C to stop)\n\n" \
+                "$metric" "$follow_sec"
+            _render_tail "$metric" "$count"
+            sleep "$follow_sec"
+        done
+    else
+        _render_tail "$metric" "$count"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -147,9 +333,199 @@ cmd_tail() {
 cmd_events() {
     check_db
     count="${1:-20}"
-    "$SQLITE" -header -column "$DB_PATH" \
-        "SELECT datetime(ts,'unixepoch','localtime') AS time, event_type, severity, details
-         FROM events ORDER BY ts DESC LIMIT $count;"
+    "$SQLITE" "$DB_PATH" \
+        "SELECT datetime(ts,'unixepoch','localtime'), event_type, severity, details
+         FROM events ORDER BY ts DESC LIMIT $count;" | \
+    awk 'BEGIN {
+        FS = "|"
+        printf "%-20s  %-20s  %-8s  %s\n", "time","event_type","severity","details"
+        printf "%-20s  %-20s  %-8s  %s\n",
+            "--------------------","--------------------","--------","-------"
+    }
+    {
+        det = $4
+        for (i = 5; i <= NF; i++) det = det "|" $i
+        printf "%-20s  %-20s  %-8s  %s\n", $1, $2, $3, det
+    }'
+}
+
+# ---------------------------------------------------------------------------
+# command: plot
+# ---------------------------------------------------------------------------
+cmd_plot() {
+    check_db
+    metric="${1:-rsrp}"
+    last_n="${2:-40}"
+
+    case "$metric" in
+        rsrp) col="rsrp"; label="RSRP"; unit="dBm" ;;
+        sinr) col="sinr"; label="SINR"; unit="dB"  ;;
+        rsrq) col="rsrq"; label="RSRQ"; unit="dB"  ;;
+        rssi) col="rssi"; label="RSSI"; unit="dBm" ;;
+        *)
+            echo "Unknown metric: $metric" >&2
+            echo "Valid: rsrp | sinr | rsrq | rssi" >&2
+            exit 1
+            ;;
+    esac
+
+    "$SQLITE" "$DB_PATH" \
+        "SELECT ts, $col FROM (
+             SELECT ts, $col FROM lte_samples
+             WHERE $col IS NOT NULL
+             ORDER BY ts DESC LIMIT $last_n
+         ) ORDER BY ts ASC;" | \
+    awk -v label="$label" -v unit="$unit" 'BEGIN {
+        FS = "|"
+        n = 0
+        H = 8
+    }
+    {
+        ts[n]  = $1 + 0
+        val[n] = $2 + 0
+        n++
+    }
+    END {
+        if (n == 0) { print "No LTE samples in database."; exit }
+
+        min_v = val[0]; max_v = val[0]
+        for (i = 1; i < n; i++) {
+            if (val[i] < min_v) min_v = val[i]
+            if (val[i] > max_v) max_v = val[i]
+        }
+
+        range = max_v - min_v
+        if (range < 1) range = 1
+
+        for (i = 0; i < n; i++)
+            row[i] = int((val[i] - min_v) / range * (H - 1) + 0.5)
+
+        yw = length(sprintf("%d", min_v))
+        if (length(sprintf("%d", max_v)) > yw) yw = length(sprintf("%d", max_v))
+        yw += 1
+
+        printf "%s %s — last %d samples  (min: %d  max: %d)\n\n",
+            label, unit, n, min_v, max_v
+
+        for (r = H-1; r >= 0; r--) {
+            y_val = min_v + r * range / (H - 1)
+            printf "%*d |", yw, int(y_val + 0.5)
+            for (i = 0; i < n; i++) {
+                if (row[i] == r) printf "*"
+                else             printf " "
+            }
+            print ""
+        }
+
+        printf "%*s +", yw, ""
+        for (i = 0; i < n; i++) printf "-"
+        print "> newer"
+
+        if (n >= 2) {
+            span = ts[n-1] - ts[0]
+            if      (span < 60)   printf "%*s  span: %ds\n",       yw+1, "", span
+            else if (span < 3600) printf "%*s  span: %dm\n",       yw+1, "", int(span / 60)
+            else                  printf "%*s  span: %dh %dm\n",   yw+1, "",
+                                      int(span / 3600), int((span % 3600) / 60)
+        }
+    }'
+}
+
+# ---------------------------------------------------------------------------
+# command: diag
+# ---------------------------------------------------------------------------
+cmd_diag() {
+    check_db
+    printf "=== rmon diag ===\n\n"
+
+    modem_row=$("$SQLITE" "$DB_PATH" \
+        "SELECT modem_model, modem_revision, modem_imei
+         FROM device_info ORDER BY ts DESC LIMIT 1;")
+    if [ -n "$modem_row" ]; then
+        m_model=$(echo "$modem_row" | cut -d'|' -f1)
+        m_rev=$(echo "$modem_row"   | cut -d'|' -f2)
+        m_imei=$(echo "$modem_row"  | cut -d'|' -f3)
+        printf "Modem:    %s\n" "$m_model"
+        printf "Firmware: %s\n" "$m_rev"
+        printf "IMEI:     %s\n\n" "$m_imei"
+    fi
+
+    lte_row=$("$SQLITE" "$DB_PATH" \
+        "SELECT ts, rat, band, rsrp, rsrq, sinr, cell_id_hex, pci, operator, net_type
+         FROM lte_samples ORDER BY ts DESC LIMIT 1;")
+    if [ -n "$lte_row" ]; then
+        lts=$(echo "$lte_row"   | cut -d'|' -f1)
+        lrat=$(echo "$lte_row"  | cut -d'|' -f2)
+        lband=$(echo "$lte_row" | cut -d'|' -f3)
+        lrsrp=$(echo "$lte_row" | cut -d'|' -f4)
+        lrsrq=$(echo "$lte_row" | cut -d'|' -f5)
+        lsinr=$(echo "$lte_row" | cut -d'|' -f6)
+        lcell=$(echo "$lte_row" | cut -d'|' -f7)
+        lpci=$(echo "$lte_row"  | cut -d'|' -f8)
+        lop=$(echo "$lte_row"   | cut -d'|' -f9)
+        lnet=$(echo "$lte_row"  | cut -d'|' -f10)
+        lage=$(fmt_age "$lts")
+        lrsrp_lbl=$(label_rsrp "$lrsrp")
+        lsinr_lbl=$(label_sinr "$lsinr")
+        printf "Signal (%s):\n" "$lage"
+        printf "  Operator: %s (%s)\n"   "$lop" "$lnet"
+        printf "  Band:     B%s / %s\n"  "$lband" "$lrat"
+        printf "  RSRP:     %d dBm  [%s]\n" "$lrsrp" "$lrsrp_lbl"
+        printf "  RSRQ:     %d dB\n"     "$lrsrq"
+        printf "  SINR:     %d dB  [%s]\n" "$lsinr" "$lsinr_lbl"
+        printf "  Cell:     hex %s  PCI %s\n\n" "$lcell" "$lpci"
+    else
+        printf "Signal:   no LTE samples yet\n\n"
+    fi
+
+    ca_count=$("$SQLITE" "$DB_PATH" \
+        "SELECT COUNT(*) FROM ca_samples
+         WHERE sample_id = (SELECT MAX(id) FROM lte_samples);")
+    printf "CA:       %d component carrier(s)\n" "${ca_count:-0}"
+
+    mode="unknown"
+    if [ -f "$CONFIG_FILE" ]; then
+        mode=$(grep -E '^[[:space:]]*mode[[:space:]]*=' "$CONFIG_FILE" 2>/dev/null \
+               | head -1 | sed 's/.*=[[:space:]]*//' | tr -d '[:space:]')
+    fi
+    printf "Mode:     %s\n\n" "${mode:-unknown}"
+
+    printf "Collectors:\n"
+    "$SQLITE" "$DB_PATH" \
+        "SELECT collector_name, last_run_ts, last_status
+         FROM collector_state ORDER BY collector_name;" | \
+    while IFS='|' read -r cname cts cstatus; do
+        cage=$(fmt_age "${cts:-0}")
+        printf "  %-10s  %-14s  [%s]\n" "$cname" "$cage" "$cstatus"
+    done
+    printf "\n"
+
+    err_rows=$("$SQLITE" "$DB_PATH" \
+        "SELECT collector_name, last_error FROM collector_state
+         WHERE last_status = 'error'
+           AND last_error != ''
+           AND last_error IS NOT NULL;")
+    if [ -n "$err_rows" ]; then
+        printf "Errors:\n"
+        echo "$err_rows" | while IFS='|' read -r ename eerr; do
+            printf "  [%s] %s\n" "$ename" "$eerr"
+        done
+    else
+        printf "Errors:   none\n"
+    fi
+    printf "\n"
+
+    printf "Recent events:\n"
+    ev_rows=$("$SQLITE" "$DB_PATH" \
+        "SELECT datetime(ts,'unixepoch','localtime'), event_type, severity
+         FROM events ORDER BY ts DESC LIMIT 5;")
+    if [ -n "$ev_rows" ]; then
+        echo "$ev_rows" | while IFS='|' read -r ets etype esev; do
+            printf "  [%s] %s (%s)\n" "$ets" "$etype" "$esev"
+        done
+    else
+        printf "  (none)\n"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -159,38 +535,33 @@ cmd_mode() {
     new_mode="${1:-}"
 
     if [ -z "$new_mode" ]; then
-        # Get current mode
         if [ -f "$CONFIG_FILE" ]; then
-            grep -E '^[[:space:]]*mode[[:space:]]*=' "$CONFIG_FILE" | head -1 | sed 's/.*=[[:space:]]*//'
+            grep -E '^[[:space:]]*mode[[:space:]]*=' "$CONFIG_FILE" \
+                | head -1 | sed 's/.*=[[:space:]]*//'
         else
-            echo "Config file not found: $CONFIG_FILE" >&2
-            exit 1
+            echo "Config file not found: $CONFIG_FILE" >&2; exit 1
         fi
         return
     fi
 
     case "$new_mode" in
         normal|debug|night)
-            # Set mode: simple in-place edit of [sampling] section
             if [ ! -f "$CONFIG_FILE" ]; then
-                echo "Config file not found: $CONFIG_FILE" >&2
-                exit 1
+                echo "Config file not found: $CONFIG_FILE" >&2; exit 1
             fi
-            # Use a temp file + move for atomic update
             TMP=$(/opt/bin/mktemp /tmp/rmon-config.XXXXXX)
             awk -v new="$new_mode" '
-                /^\[sampling\]/ { in_section=1; print; next }
-                /^\[/ && !/^\[sampling\]/ { in_section=0 }
-                in_section && /^[[:space:]]*mode[[:space:]]*=/ { print "mode = " new; next }
+                /^\[sampling\]/                         { in_s=1; print; next }
+                /^\[/ && !/^\[sampling\]/               { in_s=0 }
+                in_s && /^[[:space:]]*mode[[:space:]]*=/ { print "mode = " new; next }
                 { print }
             ' "$CONFIG_FILE" > "$TMP" && mv "$TMP" "$CONFIG_FILE"
-            echo "Mode set to: $new_mode"
-            echo "(Will take effect within 60 seconds)"
+            printf "Mode set to: %s\n" "$new_mode"
+            printf "(Takes effect within 60s)\n"
             ;;
         *)
             echo "Unknown mode: $new_mode" >&2
             echo "Valid: normal | debug | night" >&2
-            echo "(Custom modes can be defined in config.ini)" >&2
             exit 1
             ;;
     esac
@@ -206,33 +577,35 @@ cmd_db() {
 
     case "$sub" in
         info)
-            DB_SIZE=$(wc -c < "$DB_PATH")
-            echo "Database: $DB_PATH"
-            echo "Size:     $DB_SIZE bytes"
-            echo ""
-            echo "Row counts:"
-            "$SQLITE" -column "$DB_PATH" \
-                "SELECT 'lte_samples     ' AS t, COUNT(*) FROM lte_samples
-                 UNION ALL SELECT 'ca_samples      ', COUNT(*) FROM ca_samples
-                 UNION ALL SELECT 'neighbour_cells ', COUNT(*) FROM neighbour_cells
-                 UNION ALL SELECT 'temp_samples    ', COUNT(*) FROM temp_samples
-                 UNION ALL SELECT 'system_samples  ', COUNT(*) FROM system_samples
-                 UNION ALL SELECT 'ping_samples    ', COUNT(*) FROM ping_samples
-                 UNION ALL SELECT 'modem_counters  ', COUNT(*) FROM modem_counters
-                 UNION ALL SELECT 'events          ', COUNT(*) FROM events;"
-            echo ""
-            echo "Time range:"
-            "$SQLITE" -column "$DB_PATH" \
-                "SELECT 'oldest sample: ' || datetime(MIN(ts),'unixepoch','localtime') FROM lte_samples
-                 UNION ALL SELECT 'newest sample: ' || datetime(MAX(ts),'unixepoch','localtime') FROM lte_samples;"
+            db_size=$(wc -c < "$DB_PATH")
+            db_size_fmt=$(fmt_bytes "$db_size")
+            printf "Database: %s\n" "$DB_PATH"
+            printf "Size:     %s\n\n" "$db_size_fmt"
+            printf "Row counts:\n"
+            "$SQLITE" "$DB_PATH" \
+                "SELECT 'lte_samples',      COUNT(*) FROM lte_samples
+                 UNION ALL SELECT 'ca_samples',       COUNT(*) FROM ca_samples
+                 UNION ALL SELECT 'neighbour_cells',  COUNT(*) FROM neighbour_cells
+                 UNION ALL SELECT 'temp_samples',     COUNT(*) FROM temp_samples
+                 UNION ALL SELECT 'system_samples',   COUNT(*) FROM system_samples
+                 UNION ALL SELECT 'ping_samples',     COUNT(*) FROM ping_samples
+                 UNION ALL SELECT 'modem_counters',   COUNT(*) FROM modem_counters
+                 UNION ALL SELECT 'events',           COUNT(*) FROM events;" | \
+            awk 'BEGIN { FS="|" } { printf "  %-20s  %d\n", $1, $2+0 }'
+            printf "\nTime range:\n"
+            "$SQLITE" "$DB_PATH" \
+                "SELECT datetime(MIN(ts),'unixepoch','localtime'),
+                        datetime(MAX(ts),'unixepoch','localtime')
+                 FROM lte_samples;" | \
+            awk 'BEGIN { FS="|" } {
+                if ($1 == "") print "  (no samples yet)"
+                else printf "  %s  ->  %s\n", $1, $2
+            }'
             ;;
         reset)
             printf "This will WIPE all telemetry data. Type 'yes' to confirm: "
             read -r confirm
-            if [ "$confirm" != "yes" ]; then
-                echo "Aborted."
-                exit 0
-            fi
+            if [ "$confirm" != "yes" ]; then echo "Aborted."; exit 0; fi
             BACKUP_DIR="$INSTALL_BASE/backups"
             mkdir -p "$BACKUP_DIR"
             BACKUP="$BACKUP_DIR/metrics-$(/opt/bin/date +%Y%m%d-%H%M%S).db"
@@ -243,32 +616,28 @@ cmd_db() {
             echo "Database reset."
             ;;
         purge)
-            # rmon db purge --older-than 30d
             if [ "${1:-}" != "--older-than" ]; then
-                echo "Usage: rmon db purge --older-than <N>d" >&2
-                exit 1
+                echo "Usage: rmon db purge --older-than <N>d" >&2; exit 1
             fi
             duration="${2:-}"
             case "$duration" in
                 *d) days=$(echo "$duration" | sed 's/d$//') ;;
                 *)  echo "Duration must end with 'd' (e.g. 30d)" >&2; exit 1 ;;
             esac
-            cutoff=$(/opt/bin/date -d "-${days} days" +%s 2>/dev/null || echo "")
-            if [ -z "$cutoff" ]; then
-                # fallback: compute manually
-                now=$(/opt/bin/date +%s)
-                cutoff=$(( now - days * 86400 ))
-            fi
-            printf "Purge all samples older than %s days (before %s)? [y/N] " "$days" "$(/opt/bin/date -d "@$cutoff" 2>/dev/null || echo "$cutoff")"
+            now=$(/opt/bin/date +%s)
+            cutoff=$(( now - days * 86400 ))
+            printf "Purge samples older than %s days (before %s)? [y/N] " \
+                "$days" "$(/opt/bin/date -d "@${cutoff}" 2>/dev/null || echo "$cutoff")"
             read -r confirm
-            [ "$confirm" != "y" ] && [ "$confirm" != "Y" ] && { echo "Aborted."; exit 0; }
-            for table in lte_samples ca_samples neighbour_cells temp_samples system_samples ping_samples modem_counters process_health; do
-                "$SQLITE" "$DB_PATH" "DELETE FROM $table WHERE ts < $cutoff;"
+            [ "$confirm" = "y" ] || [ "$confirm" = "Y" ] || { echo "Aborted."; exit 0; }
+            for tbl in lte_samples ca_samples neighbour_cells temp_samples \
+                       system_samples ping_samples modem_counters process_health; do
+                "$SQLITE" "$DB_PATH" "DELETE FROM $tbl WHERE ts < $cutoff;"
             done
             echo "Purge complete. Run 'rmon db vacuum' to reclaim space."
             ;;
         vacuum)
-            echo "Running VACUUM (may take a moment)..."
+            echo "Running VACUUM..."
             "$SQLITE" "$DB_PATH" "VACUUM;"
             echo "Done."
             ;;
@@ -293,10 +662,11 @@ cmd_export() {
         esac
     done
 
+    now=$(/opt/bin/date +%s)
     if [ -n "$duration" ]; then
         case "$duration" in
-            *h) n=$(echo "$duration" | sed 's/h$//'); cutoff=$(( $(/opt/bin/date +%s) - n*3600 )) ;;
-            *d) n=$(echo "$duration" | sed 's/d$//'); cutoff=$(( $(/opt/bin/date +%s) - n*86400 )) ;;
+            *h) n=$(echo "$duration" | sed 's/h$//'); cutoff=$(( now - n * 3600 )) ;;
+            *d) n=$(echo "$duration" | sed 's/d$//'); cutoff=$(( now - n * 86400 )) ;;
             *)  echo "Duration must end with h or d (e.g. 24h, 7d)" >&2; exit 1 ;;
         esac
         where="WHERE ts >= $cutoff"
@@ -304,9 +674,10 @@ cmd_export() {
         where=""
     fi
 
-    # CSV export of lte_samples
     "$SQLITE" -header -csv "$DB_PATH" \
-        "SELECT datetime(ts,'unixepoch','localtime') AS time, rat, band, rsrp, rsrq, rssi, sinr, cqi, cell_id_hex, pci, earfcn, operator
+        "SELECT datetime(ts,'unixepoch','localtime') AS time,
+                rat, band, rsrp, rsrq, rssi, sinr, cqi,
+                cell_id_hex, pci, earfcn, operator
          FROM lte_samples $where ORDER BY ts;"
 }
 
@@ -314,13 +685,15 @@ cmd_export() {
 # main
 # ---------------------------------------------------------------------------
 case "${1:-help}" in
-    status)   shift; cmd_status "$@" ;;
-    tail)     shift; cmd_tail "$@" ;;
-    events)   shift; cmd_events "$@" ;;
-    mode)     shift; cmd_mode "$@" ;;
-    db)       shift; cmd_db "$@" ;;
-    export)   shift; cmd_export "$@" ;;
+    status)              shift; cmd_status "$@" ;;
+    tail)                shift; cmd_tail "$@" ;;
+    events)              shift; cmd_events "$@" ;;
+    plot)                shift; cmd_plot "$@" ;;
+    diag)                shift; cmd_diag "$@" ;;
+    mode)                shift; cmd_mode "$@" ;;
+    db)                  shift; cmd_db "$@" ;;
+    export)              shift; cmd_export "$@" ;;
     version|--version|-v) echo "rmon $VERSION" ;;
-    help|--help|-h|"") usage ;;
-    *)        echo "Unknown command: $1" >&2; echo "Run 'rmon help' for usage." >&2; exit 1 ;;
+    help|--help|-h|"")    usage ;;
+    *) echo "Unknown command: $1" >&2; echo "Run 'rmon help' for usage." >&2; exit 1 ;;
 esac

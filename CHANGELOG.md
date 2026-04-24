@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-24
+
+### Added — CLI polish
+
+#### `bin/rmon`
+- **`rmon plot [metric] [N]`** — ASCII chart of last N samples (default: rsrp, 40)
+  - Metrics: `rsrp` | `sinr` | `rsrq` | `rssi`
+  - Scaled Y-axis with min/max annotation and time span footer
+  - Implemented in awk, POSIX sh compatible
+- **`rmon diag`** — quick diagnostic dump
+  - Modem model, firmware, IMEI (from `device_info` table)
+  - Latest signal: operator, band, RSRP/RSRQ/SINR with quality labels
+  - CA component carrier count
+  - Current sampling mode
+  - Collector last-run times
+  - Active errors and last 5 events
+- **`rmon tail --follow [sec]`** — live tail for any metric
+  - `-f` shorthand supported
+  - Interval follows `--follow` directly (e.g. `--follow 10`)
+  - Clears terminal via ANSI escape on each refresh
+- **`rmon tail lte`** — added `quality` column (Excellent/Good/Fair/Poor/Very poor)
+  based on RSRP thresholds
+
+#### Helpers
+- `fmt_bytes` — human-readable byte sizes (B / KB / MB / GB)
+- `fmt_age` — relative timestamp age ("2m ago", "1h 5m ago", "never")
+- `label_rsrp` / `label_sinr` — signal quality labels
+
+### Changed
+- `rmon status` — replaced raw epoch `1970-01-01 00:00:00` for never-run collectors
+  with `never` (via `fmt_age` on `last_run_ts=0`)
+- `rmon status` — DB size now shown human-readable (e.g. `1.4 MB`)
+- `rmon status` — shows current sampling mode
+- `rmon status` — collector last-run shown as relative age ("2m ago")
+- `rmon db info` — DB size now human-readable
+- `rmon tail system` — uptime shown as duration ("1d 3h", "45m") instead of raw seconds
+- `rmon tail` / `rmon events` — consistent column-aligned output via awk
+- VERSION bumped to 0.3.0
+
 ## [0.2.0] - 2026-04-24
 
 ### Added — Data collection layer
