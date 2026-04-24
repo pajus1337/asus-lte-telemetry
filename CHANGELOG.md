@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-04-24
+
+### Fixed
+
+- **`install.sh`** — package check now verifies the actual binary exists, not just that
+  the package name appears in `opkg list-installed`. A package can be listed as installed
+  while its binary is missing (e.g. after USB remount or a failed previous install).
+  Critical binaries checked: `sqlite3`, `sleep`, `mktemp`, `date`, `timeout` in `/opt/bin/`.
+  If the binary is absent the package is added to MISSING and reinstalled.
+
 ## [0.4.2] - 2026-04-24
 
 ### Fixed

@@ -203,9 +203,22 @@ step "Step 2/7: Install Entware packages"
 
 REQUIRED_PKGS="sqlite3-cli vnstat coreutils-sleep coreutils-mktemp coreutils-date coreutils-stat coreutils-timeout psmisc lsof"
 
+# Packages may be listed as installed but binary missing (e.g. after USB remount).
+# Check both the package list AND the actual binary for critical packages.
+pkg_binary_ok() {
+    case "$1" in
+        sqlite3-cli)       [ -x /opt/bin/sqlite3 ] ;;
+        coreutils-sleep)   [ -x /opt/bin/sleep ] ;;
+        coreutils-mktemp)  [ -x /opt/bin/mktemp ] ;;
+        coreutils-date)    [ -x /opt/bin/date ] ;;
+        coreutils-timeout) [ -x /opt/bin/timeout ] ;;
+        *)                 return 0 ;;
+    esac
+}
+
 MISSING=""
 for pkg in $REQUIRED_PKGS; do
-    if /opt/bin/opkg list-installed | grep -q "^$pkg "; then
+    if /opt/bin/opkg list-installed | grep -q "^$pkg " && pkg_binary_ok "$pkg"; then
         :
     else
         MISSING="$MISSING $pkg"
@@ -213,9 +226,9 @@ for pkg in $REQUIRED_PKGS; do
 done
 
 if [ -z "$MISSING" ]; then
-    ok "All required packages already installed"
+    ok "All required packages installed and binaries verified"
 else
-    info "Missing packages:$MISSING"
+    info "Missing or incomplete packages:$MISSING"
     if ask_yn "Install them now?" default_y; then
         /opt/bin/opkg update || warn "opkg update failed (continuing)"
         # shellcheck disable=SC2086

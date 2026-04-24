@@ -179,7 +179,7 @@ Port is configurable in `config.ini` under `[dashboard] port` (default 8080).
 
 ## Project status
 
-**v0.4.2** — stable, tested on ASUS 4G-AC86U with firmware `3.0.0.4.382.x` and
+**v0.4.3** — stable, tested on ASUS 4G-AC86U with firmware `3.0.0.4.382.x` and
 modem firmware `EM12GPAR01A21M4G`.
 
 All collectors, the dispatcher, and the HTTP dashboard are implemented and
