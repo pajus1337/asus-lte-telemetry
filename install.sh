@@ -226,20 +226,19 @@ else
     fi
 fi
 
-# Optional: busybox-httpd for the web dashboard
-# On ASUS stock firmware, BusyBox may already have httpd compiled in as a multi-call
-# applet; rmon web start will detect it automatically. Installing busybox-httpd from
-# Entware ensures a standalone `httpd` command is available in /opt/sbin/.
-if command -v httpd >/dev/null 2>&1; then
-    ok "httpd available — web dashboard ready"
+# Optional: uhttpd for the web dashboard (Entware's OpenWrt HTTP server with CGI)
+if command -v uhttpd >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1; then
+    ok "HTTP server available — web dashboard ready (rmon web start)"
 else
-    info "Web dashboard needs httpd (BusyBox httpd)."
-    if ask_yn "Install busybox-httpd from Entware?" default_y; then
-        /opt/bin/opkg install busybox-httpd 2>/dev/null \
-            && ok "busybox-httpd installed" \
-            || warn "busybox-httpd not found in Entware — rmon will try BusyBox multi-call fallback"
+    info "Web dashboard requires an HTTP server with CGI support."
+    info "Recommended: uhttpd (Entware, ~50 KB, OpenWrt-native, CGI built in)"
+    if ask_yn "Install uhttpd now?" default_y; then
+        /opt/bin/opkg update >/dev/null 2>&1 || true
+        /opt/bin/opkg install uhttpd \
+            && ok "uhttpd installed — start dashboard with: rmon web start" \
+            || warn "uhttpd install failed; try manually: opkg install uhttpd"
     else
-        info "Skipped. Run 'rmon web start' later; it will auto-detect BusyBox httpd."
+        info "Skipped. Install later with: opkg install uhttpd"
     fi
 fi
 

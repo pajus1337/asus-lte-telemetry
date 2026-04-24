@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-04-24
+
+### Fixed
+
+- **`rmon web start`** — switched HTTP server from BusyBox httpd to `uhttpd` (Entware).
+  `busybox-httpd` does not exist in Entware aarch64 and stock ASUS firmware BusyBox 1.25.1
+  does not have `httpd` compiled in. `uhttpd` is Entware's native OpenWrt HTTP server with
+  CGI support built in; invoked as `uhttpd -f -p <port> -h <webroot> -x /cgi-bin`.
+  BusyBox httpd and multi-call fallbacks are kept for other hardware.
+- **`install.sh`** — optional HTTP server step now offers `uhttpd` instead of non-existent
+  `busybox-httpd`; runs `opkg update` first to refresh the package list.
+
 ## [0.4.1] - 2026-04-24
 
 ### Fixed

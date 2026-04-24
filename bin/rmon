@@ -28,7 +28,7 @@
 
 set -u
 
-VERSION="0.4.1"
+VERSION="0.4.2"
 INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
 DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
 CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"
@@ -718,35 +718,39 @@ cmd_web_start() {
         rm -f "$_web_pid_file"
     fi
 
-    # Find httpd — try standalone first, then BusyBox multi-call (ASUS stock firmware
-    # has httpd compiled into /bin/busybox but no standalone symlink in PATH)
-    _httpd_bin=""
-    if command -v httpd >/dev/null 2>&1; then
-        _httpd_bin="httpd"
+    _web_dir="$INSTALL_BASE/web"
+
+    if [ ! -d "$_web_dir" ]; then
+        printf 'ERROR: web directory not found at %s\n' "$_web_dir" >&2
+        return 1
+    fi
+
+    chmod +x "$_web_dir/cgi-bin/"*.cgi 2>/dev/null || true
+
+    # Launch HTTP server — try in order: uhttpd (Entware), httpd (BusyBox standalone),
+    # BusyBox multi-call. uhttpd needs -x /cgi-bin to execute CGI scripts.
+    _pid=""
+    if command -v uhttpd >/dev/null 2>&1; then
+        uhttpd -f -p "$_port" -h "$_web_dir" -x /cgi-bin &
+        _pid=$!
+    elif command -v httpd >/dev/null 2>&1; then
+        httpd -f -p "$_port" -h "$_web_dir" &
+        _pid=$!
     else
-        for _bb in busybox /opt/bin/busybox /bin/busybox; do
-            if command -v "$_bb" >/dev/null 2>&1 && "$_bb" --list 2>/dev/null | grep -q "^httpd$"; then
-                _httpd_bin="$_bb httpd"
+        for _bb in /opt/bin/busybox /bin/busybox busybox; do
+            if command -v "$_bb" >/dev/null 2>&1 && "$_bb" 2>&1 | grep -q "httpd"; then
+                "$_bb" httpd -f -p "$_port" -h "$_web_dir" &
+                _pid=$!
                 break
             fi
         done
     fi
-    if [ -z "$_httpd_bin" ]; then
-        printf 'ERROR: httpd not found. Install with: opkg install busybox-httpd\n' >&2
+
+    if [ -z "$_pid" ]; then
+        printf 'ERROR: No HTTP server found.\n' >&2
+        printf 'Install one with: opkg install uhttpd\n' >&2
         return 1
     fi
-
-    if [ ! -d "$INSTALL_BASE/web" ]; then
-        echo "ERROR: web directory not found at $INSTALL_BASE/web" >&2
-        return 1
-    fi
-
-    chmod +x "$INSTALL_BASE/web/cgi-bin/"*.cgi 2>/dev/null || true
-
-    # $_httpd_bin is intentionally unquoted: may be "busybox httpd" (two words)
-    # shellcheck disable=SC2086
-    $_httpd_bin -f -p "$_port" -h "$INSTALL_BASE/web" &
-    _pid=$!
     echo "$_pid" > "$_web_pid_file"
 
     sleep 1
