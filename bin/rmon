@@ -28,7 +28,7 @@
 
 set -u
 
-VERSION="0.4.0"
+VERSION="0.4.1"
 INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
 DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
 CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"
@@ -718,8 +718,21 @@ cmd_web_start() {
         rm -f "$_web_pid_file"
     fi
 
-    if ! command -v httpd >/dev/null 2>&1; then
-        echo "ERROR: httpd not found. BusyBox httpd is required." >&2
+    # Find httpd — try standalone first, then BusyBox multi-call (ASUS stock firmware
+    # has httpd compiled into /bin/busybox but no standalone symlink in PATH)
+    _httpd_bin=""
+    if command -v httpd >/dev/null 2>&1; then
+        _httpd_bin="httpd"
+    else
+        for _bb in busybox /opt/bin/busybox /bin/busybox; do
+            if command -v "$_bb" >/dev/null 2>&1 && "$_bb" --list 2>/dev/null | grep -q "^httpd$"; then
+                _httpd_bin="$_bb httpd"
+                break
+            fi
+        done
+    fi
+    if [ -z "$_httpd_bin" ]; then
+        printf 'ERROR: httpd not found. Install with: opkg install busybox-httpd\n' >&2
         return 1
     fi
 
@@ -730,7 +743,9 @@ cmd_web_start() {
 
     chmod +x "$INSTALL_BASE/web/cgi-bin/"*.cgi 2>/dev/null || true
 
-    httpd -f -p "$_port" -h "$INSTALL_BASE/web" &
+    # $_httpd_bin is intentionally unquoted: may be "busybox httpd" (two words)
+    # shellcheck disable=SC2086
+    $_httpd_bin -f -p "$_port" -h "$INSTALL_BASE/web" &
     _pid=$!
     echo "$_pid" > "$_web_pid_file"
 

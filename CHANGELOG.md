@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-04-24
+
+### Fixed
+
+- **`rmon web start`** — `httpd not found` on ASUS stock firmware where BusyBox has
+  the httpd applet compiled in but no standalone `httpd` symlink in PATH. Now detects
+  httpd via BusyBox multi-call binary (`busybox httpd`, `/opt/bin/busybox httpd`,
+  `/bin/busybox httpd`) before giving up. Error message now includes the install hint.
+- **`install.sh`** — missing web dashboard package step. Added optional `busybox-httpd`
+  install prompt after required packages; non-fatal if not found in Entware (rmon
+  falls back to BusyBox multi-call detection automatically).
+- **`install.sh`** — "Next steps" footer now includes `rmon web start` and the dashboard
+  URL; `rmon status` replaces the raw `sqlite3` command for readability.
+- **`README.md`** — updated project status (was v0.2.0), fixed dashboard URL (removed
+  non-existent `/asus-lte-telemetry/` path suffix), updated architecture diagram
+  (cron → init loop, `web/api.sh` → `web/cgi-bin/api.cgi`), added `rmon web` commands
+  to CLI section, added dashboard feature list.
+
 ## [0.4.0] - 2026-04-24
 
 ### Added — HTTP dashboard

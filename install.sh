@@ -226,6 +226,23 @@ else
     fi
 fi
 
+# Optional: busybox-httpd for the web dashboard
+# On ASUS stock firmware, BusyBox may already have httpd compiled in as a multi-call
+# applet; rmon web start will detect it automatically. Installing busybox-httpd from
+# Entware ensures a standalone `httpd` command is available in /opt/sbin/.
+if command -v httpd >/dev/null 2>&1; then
+    ok "httpd available — web dashboard ready"
+else
+    info "Web dashboard needs httpd (BusyBox httpd)."
+    if ask_yn "Install busybox-httpd from Entware?" default_y; then
+        /opt/bin/opkg install busybox-httpd 2>/dev/null \
+            && ok "busybox-httpd installed" \
+            || warn "busybox-httpd not found in Entware — rmon will try BusyBox multi-call fallback"
+    else
+        info "Skipped. Run 'rmon web start' later; it will auto-detect BusyBox httpd."
+    fi
+fi
+
 # =============================================================================
 # Step 3: directory layout
 # =============================================================================
@@ -470,9 +487,13 @@ Next steps:
        /opt/etc/init.d/S99asus-lte-telemetry start
 
   3. Wait 60 seconds and check collected data:
-       sqlite3 $DB_PATH "SELECT * FROM lte_samples ORDER BY ts DESC LIMIT 5;"
+       rmon status
 
-  4. Tail the log:
+  4. Start the web dashboard:
+       rmon web start
+       # then open http://$(ip addr show br0 2>/dev/null | awk '/inet /{split(\$2,a,"/");print a[1];exit}'):8080/
+
+  5. Tail the log:
        tail -f $INSTALL_BASE/logs/dispatcher.log
 
 To uninstall:

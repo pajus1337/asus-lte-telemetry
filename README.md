@@ -20,7 +20,7 @@ firmware (no Merlin, no custom kernel) with minimal RAM footprint.
 - **Event detection** — cell changes, SCC drops, SINR degradation, reboots
 - **Dynamic sampling** — configurable per-mode intervals (normal / debug / night / custom)
 - **Auto-switch mode** — increases sampling rate on signal degradation
-- **Local dashboard** — LAN-only HTML/Chart.js (no cloud, no telemetry)
+- **Local dashboard** — LAN-only HTML/CSS/JS SPA, no cloud, no telemetry, no external deps
 - **Data retention** — 180 days by default, manual reset and purge supported
 
 ## Supported hardware
@@ -75,16 +75,28 @@ cd /tmp/mnt/System/asus-lte-telemetry
 sh install.sh
 ```
 
-**Option C — single-file bootstrap** (planned for v0.5).
-
 The installer will:
 
 1. Verify environment (Entware, architecture, modem presence, port accessibility)
-2. Install required Entware packages
-3. Create directory structure at `/tmp/mnt/System/asus-lte-telemetry/`
-4. Initialise SQLite schema
-5. Register the dispatcher with Entware init
-6. Run a smoke test
+2. Install required Entware packages (`sqlite3-cli`, `vnstat`, `coreutils-*`, etc.)
+3. Optionally install `busybox-httpd` for the web dashboard
+4. Create directory structure at `/tmp/mnt/System/asus-lte-telemetry/`
+5. Initialise SQLite schema
+6. Register the dispatcher with Entware init (`/opt/etc/init.d/S99asus-lte-telemetry`)
+7. Run a smoke test
+
+After install:
+
+```sh
+# Start the dispatcher background loop
+/opt/etc/init.d/S99asus-lte-telemetry start
+
+# Check collector status (after ~60 s)
+rmon status
+
+# Start the web dashboard
+rmon web start
+```
 
 Removal:
 
@@ -97,25 +109,45 @@ sh /tmp/mnt/System/asus-lte-telemetry/uninstall.sh
 After installation, the `rmon` command becomes available:
 
 ```sh
-rmon status                # current collection state
-rmon tail lte 20           # last 20 LTE samples
-rmon mode debug            # switch to high-frequency sampling
-rmon mode normal           # back to normal
-rmon export --last 24h     # export recent data as CSV
-rmon db reset              # wipe DB (with backup + confirmation)
+rmon status                     # current collection state and DB size
+rmon tail lte 20                # last 20 LTE samples
+rmon tail lte --follow          # live tail (refreshes every 5 s)
+rmon plot rsrp 40               # ASCII chart of last 40 RSRP samples
+rmon diag                       # modem info, signal summary, recent errors
+rmon mode debug                 # switch to high-frequency sampling
+rmon mode normal                # back to normal
+rmon web start                  # start HTTP dashboard (BusyBox httpd)
+rmon web stop                   # stop the dashboard
+rmon web status                 # show dashboard URL and running state
+rmon export --last 24h          # export recent data as CSV
+rmon events 20                  # last 20 events
+rmon db info                    # row counts, time range, file size
+rmon db reset                   # wipe DB (creates backup, prompts confirmation)
 rmon db purge --older-than 30d
 rmon help
 ```
 
 ## Dashboard
 
-Once the dispatcher has run for a few minutes, open in any browser on your LAN:
+Once the dispatcher has run for a few minutes, start the dashboard and open the
+URL in any browser on your LAN:
 
-```
-http://<router-ip>:8080/asus-lte-telemetry/
+```sh
+rmon web start
+# Dashboard: http://192.168.50.1:8080/
 ```
 
-(Port and path configurable in `config.ini`.)
+The dashboard auto-refreshes every 30 s and shows:
+
+- Signal quality (RSRP/RSRQ/SINR) with quality badges and RSRP sparkline
+- Carrier aggregation (PCC + SCCs, per-carrier band/RSRP/SINR)
+- System metrics (RAM, load, uptime, disk, CPU temp)
+- Ping targets (loss%, RTT)
+- Modem temperature sensors
+- Collector health (last-run age and status for all four collectors)
+- Last 5 events
+
+Port is configurable in `config.ini` under `[dashboard] port` (default 8080).
 
 ## Data retention
 
@@ -126,29 +158,32 @@ http://<router-ip>:8080/asus-lte-telemetry/
 
 ## Architecture
 
-See `docs/ARCHITECTURE.md` for a detailed breakdown. In short:
-
 ```
-          cron (every 1 min)
-                 │
+      /opt/etc/init.d/S99asus-lte-telemetry
+                 │  (60 s loop)
                  ▼
          bin/dispatcher.sh ──reads──▶ config.ini
                  │
-                 ├──▶ collector-lte.sh ──▶ AT commands ──▶ SQLite
-                 ├──▶ collector-system.sh ──▶ /proc ──▶ SQLite
-                 ├──▶ collector-ping.sh ──▶ ping ──▶ SQLite
-                 └──▶ collector-vnstat.sh ──▶ vnstat ──▶ SQLite
-                                                │
-                                                ▼
-                                  web/api.sh (CGI) ──▶ dashboard
+                 ├──▶ collector-lte.sh    ──▶ AT commands  ──▶ SQLite
+                 ├──▶ collector-system.sh ──▶ /proc        ──▶ SQLite
+                 ├──▶ collector-ping.sh   ──▶ ping         ──▶ SQLite
+                 └──▶ collector-vnstat.sh ──▶ vnstat       ──▶ SQLite
+                                                  │
+                                                  ▼
+                                   BusyBox httpd (rmon web start)
+                                        │
+                                        ├──▶ web/index.html       (SPA dashboard)
+                                        ├──▶ web/cgi-bin/api.cgi  (current state JSON)
+                                        └──▶ web/cgi-bin/history.cgi (sparkline data)
 ```
 
 ## Project status
 
-**v0.2.0** — data collection layer complete and ready for testing.
-Collectors, dispatcher, auto-switch, and event detection are implemented.
-Dashboard and advanced CLI features are planned for v0.3–v0.4.
-Breaking changes may occur before v1.0.
+**v0.4.1** — stable, tested on ASUS 4G-AC86U with firmware `3.0.0.4.382.x` and
+modem firmware `EM12GPAR01A21M4G`.
+
+All collectors, the dispatcher, and the HTTP dashboard are implemented and
+confirmed working. Breaking changes may still occur before v1.0.
 
 ## License
 
