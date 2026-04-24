@@ -60,7 +60,7 @@ at_cmd() {
 # Globals match schema.sql lte_samples columns:
 AT_RRC_STATE="" AT_RAT="" AT_DUPLEX="" AT_MCC="" AT_MNC=""
 AT_CELL_ID_HEX="" AT_PCI="" AT_EARFCN="" AT_BAND=""
-AT_BW_DL_CODE="" AT_BW_UL_CODE=""
+AT_BW_DL_CODE="" AT_BW_UL_CODE="" AT_TAC_HEX=""
 AT_RSRP="" AT_RSRQ="" AT_RSSI="" AT_SINR=""
 AT_CQI="" AT_TX_POWER=""
 AT_RAW_QENG=""
@@ -77,31 +77,34 @@ parse_qeng_serving() {
     # Remove +QENG: prefix and all quotes, trim CR
     _data=$(echo "$_line" | sed 's/+QENG:[[:space:]]*//' | tr -d '"' | tr -d '\r')
 
-    # Split by comma — fields after "servingcell,"
-    AT_RRC_STATE=$(echo "$_data" | cut -d',' -f1)
-    AT_RAT=$(echo "$_data" | cut -d',' -f2)       # LTE
-    AT_DUPLEX=$(echo "$_data" | cut -d',' -f3)     # FDD
-    AT_MCC=$(echo "$_data" | cut -d',' -f4)
-    AT_MNC=$(echo "$_data" | cut -d',' -f5)
-    AT_CELL_ID_HEX=$(echo "$_data" | cut -d',' -f6)
-    # field 7 often = phy_cell_id or TAC depending on firmware
-    AT_EARFCN=$(echo "$_data" | cut -d',' -f8)
-    AT_BW_DL_CODE=$(echo "$_data" | cut -d',' -f9)
-    AT_BW_UL_CODE=$(echo "$_data" | cut -d',' -f10)
-    AT_BAND=$(echo "$_data" | cut -d',' -f11)
-    AT_PCI=$(echo "$_data" | cut -d',' -f12)
-    AT_RSRP=$(echo "$_data" | cut -d',' -f13)
-    AT_RSRQ=$(echo "$_data" | cut -d',' -f14)
-    AT_RSSI=$(echo "$_data" | cut -d',' -f15)
-    AT_SINR=$(echo "$_data" | cut -d',' -f16)
-    AT_CQI=$(echo "$_data" | cut -d',' -f17)
-    AT_TX_POWER=$(echo "$_data" | cut -d',' -f18 | tr -d '\r')
+    # Field mapping (1-indexed for cut, from full comma-separated string):
+    # f1=servingcell  f2=rrc_state  f3=rat  f4=duplex  f5=mcc  f6=mnc
+    # f7=cell_id_hex  f8=pci  f9=earfcn  f10=band  f11=ul_bw  f12=dl_bw
+    # f13=tac_hex  f14=rsrp  f15=rsrq  f16=rssi  f17=sinr  f18=cqi  f19=tx_power
+    AT_RRC_STATE=$(echo "$_data" | cut -d',' -f2)
+    AT_RAT=$(echo "$_data" | cut -d',' -f3)
+    AT_DUPLEX=$(echo "$_data" | cut -d',' -f4)
+    AT_MCC=$(echo "$_data" | cut -d',' -f5)
+    AT_MNC=$(echo "$_data" | cut -d',' -f6)
+    AT_CELL_ID_HEX=$(echo "$_data" | cut -d',' -f7)
+    AT_PCI=$(echo "$_data" | cut -d',' -f8)
+    AT_EARFCN=$(echo "$_data" | cut -d',' -f9)
+    AT_BAND=$(echo "$_data" | cut -d',' -f10)
+    AT_BW_UL_CODE=$(echo "$_data" | cut -d',' -f11)
+    AT_BW_DL_CODE=$(echo "$_data" | cut -d',' -f12)
+    AT_TAC_HEX=$(echo "$_data" | cut -d',' -f13)
+    AT_RSRP=$(echo "$_data" | cut -d',' -f14)
+    AT_RSRQ=$(echo "$_data" | cut -d',' -f15)
+    AT_RSSI=$(echo "$_data" | cut -d',' -f16)
+    AT_SINR=$(echo "$_data" | cut -d',' -f17)
+    AT_CQI=$(echo "$_data" | cut -d',' -f18)
+    AT_TX_POWER=$(echo "$_data" | cut -d',' -f19 | tr -d '\r')
 
     # Clean dash-as-null (modem returns "-" for unavailable fields)
-    [ "$AT_CQI" = "-" ] && AT_CQI=""
+    [ "$AT_CQI" = "-" ]      && AT_CQI=""
     [ "$AT_TX_POWER" = "-" ] && AT_TX_POWER=""
 
-    log_debug "at" "QENG: state=${AT_RRC_STATE} RSRP=${AT_RSRP} SINR=${AT_SINR} band=${AT_BAND} cell=${AT_CELL_ID_HEX}"
+    log_debug "at" "QENG: state=${AT_RRC_STATE} RSRP=${AT_RSRP} SINR=${AT_SINR} band=${AT_BAND} cell=${AT_CELL_ID_HEX} pci=${AT_PCI}"
     return 0
 }
 

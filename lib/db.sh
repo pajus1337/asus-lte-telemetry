@@ -17,10 +17,11 @@
 
 # db_exec SQL — execute statement, no output expected
 db_exec() {
-    "$SQLITE" "$DB_PATH" "$1" 2>/dev/null
+    _db_err=$("$SQLITE" "$DB_PATH" "$1" 2>&1)
     _rc=$?
     if [ $_rc -ne 0 ]; then
         log_error "db" "Query failed (rc=${_rc}): $(echo "$1" | head -1)"
+        [ -n "$_db_err" ] && log_error "db" "SQLite: ${_db_err}"
     fi
     return $_rc
 }

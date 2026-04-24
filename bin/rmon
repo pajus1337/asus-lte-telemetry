@@ -151,7 +151,7 @@ cmd_status() {
     mode="unknown"
     if [ -f "$CONFIG_FILE" ]; then
         mode=$(grep -E '^[[:space:]]*mode[[:space:]]*=' "$CONFIG_FILE" 2>/dev/null \
-               | head -1 | sed 's/.*=[[:space:]]*//' | tr -d '[:space:]')
+               | head -1 | sed 's/.*=[[:space:]]*//' | sed 's/[[:space:]]*$//')
     fi
 
     printf "=== asus-lte-telemetry status ===\n\n"
@@ -486,7 +486,7 @@ cmd_diag() {
     mode="unknown"
     if [ -f "$CONFIG_FILE" ]; then
         mode=$(grep -E '^[[:space:]]*mode[[:space:]]*=' "$CONFIG_FILE" 2>/dev/null \
-               | head -1 | sed 's/.*=[[:space:]]*//' | tr -d '[:space:]')
+               | head -1 | sed 's/.*=[[:space:]]*//' | sed 's/[[:space:]]*$//')
     fi
     printf "Mode:     %s\n\n" "${mode:-unknown}"
 

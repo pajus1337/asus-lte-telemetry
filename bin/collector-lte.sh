@@ -47,7 +47,7 @@ collect_lte() {
     _lte_sql="INSERT INTO lte_samples (
         ts, rrc_state, rat, duplex, mcc, mnc,
         cell_id_hex, cell_id_dec, pci, earfcn, band,
-        bw_dl_code, bw_ul_code,
+        bw_dl_code, bw_ul_code, tac_hex,
         rsrp, rsrq, rssi, sinr, cqi, tx_power,
         operator, net_type,
         rsrp_rx0, rsrp_rx1, rsrp_rx2, rsrp_rx3,
@@ -59,6 +59,7 @@ collect_lte() {
         $(db_quote "$AT_CELL_ID_HEX"), ${_cell_id_dec:-NULL},
         ${AT_PCI:-NULL}, ${AT_EARFCN:-NULL}, ${AT_BAND:-NULL},
         ${AT_BW_DL_CODE:-NULL}, ${AT_BW_UL_CODE:-NULL},
+        $(db_quote "$AT_TAC_HEX"),
         ${AT_RSRP:-NULL}, ${AT_RSRQ:-NULL}, ${AT_RSSI:-NULL},
         ${AT_SINR:-NULL}, ${AT_CQI:-NULL}, ${AT_TX_POWER:-NULL},
         $(db_quote "$AT_OPERATOR"), $(db_quote "$AT_NET_TYPE"),
