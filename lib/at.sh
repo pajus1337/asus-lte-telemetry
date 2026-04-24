@@ -15,6 +15,12 @@ AT_SEND="${AT_SEND:-${INSTALL_BASE}/bin/at-send}"
 AT_TIMEOUT="${AT_TIMEOUT:-2}"
 AT_TIMEOUT_TEMP="${AT_TIMEOUT_TEMP:-3}"  # QTEMP needs ≥2s per AT_COMMANDS.md
 
+# Read AT_PORT from config if not already set in environment
+if [ -z "${AT_PORT:-}" ]; then
+    AT_PORT=$(cfg_get general at_port "/dev/ttyUSB3")
+fi
+export AT_PORT
+
 # ---------------------------------------------------------------------------
 # Core AT send wrapper
 # ---------------------------------------------------------------------------

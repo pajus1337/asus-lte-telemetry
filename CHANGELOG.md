@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-04-25
+
+### Fixed
+
+- **AT port conflict** — `ttyUSB2` is permanently held by router processes (`quectel-CM` and
+  LTE management daemons) on ASUS 4G-AC86U stock firmware, causing every AT command to return
+  `ERROR`. Changed default AT port to `ttyUSB3` (free secondary AT port on Quectel EM12-G).
+- **`lib/at.sh`** — now reads `at_port` from `config.ini` via `cfg_get` and exports it as
+  `AT_PORT` before calling `at-send`, so the port is configurable without env-var hacks.
+- **`config/config.ini.example`** — default `at_port` changed to `/dev/ttyUSB3`.
+- **`bin/at-send`** — built-in default fallback changed to `/dev/ttyUSB3`.
+- **`install.sh`** — port auto-detection now prefers `ttyUSB3` over `ttyUSB2`; if `ttyUSB2`
+  is detected as held by another process and `ttyUSB3` exists, auto-switches to `ttyUSB3`.
+  After writing `config.ini`, patches `at_port` to the detected port value.
+
 ## [0.4.5] - 2026-04-25
 
 ### Fixed

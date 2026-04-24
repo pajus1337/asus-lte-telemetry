@@ -22,7 +22,9 @@ log_level = info
 lock_dir = /tmp/asus-lte-telemetry
 
 # Serial port for AT commands
-at_port = /dev/ttyUSB2
+# ttyUSB2 is held by quectel-CM and LTE daemons on ASUS 4G-AC86U stock firmware.
+# ttyUSB3 is the free secondary AT port on Quectel EM12-G.
+at_port = /dev/ttyUSB3
 
 # WAN interface (for vnstat and /proc/net/dev)
 wan_interface = wwan0

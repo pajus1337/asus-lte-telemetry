@@ -29,7 +29,7 @@
 
 set -u
 
-readonly PORT="${AT_PORT:-/dev/ttyUSB2}"
+readonly PORT="${AT_PORT:-/dev/ttyUSB3}"
 readonly SLEEP_BIN="/opt/bin/sleep"
 readonly MKTEMP_BIN="/opt/bin/mktemp"
 readonly DEFAULT_TIMEOUT="${AT_TIMEOUT:-1.5}"

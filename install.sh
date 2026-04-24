@@ -176,7 +176,17 @@ fi
 ok "Install target: $INSTALL_BASE"
 
 # -- serial port -------------------------------------------------------------
-AT_PORT="/dev/ttyUSB2"
+# On ASUS 4G-AC86U stock firmware, ttyUSB2 is held by quectel-CM and LTE
+# management daemons. ttyUSB3 is the free secondary AT port on Quectel EM12-G.
+# Auto-select: prefer ttyUSB3 (free), fall back to ttyUSB2 if ttyUSB3 absent.
+if [ -c /dev/ttyUSB3 ]; then
+    AT_PORT="/dev/ttyUSB3"
+elif [ -c /dev/ttyUSB2 ]; then
+    AT_PORT="/dev/ttyUSB2"
+else
+    AT_PORT="/dev/ttyUSB3"
+fi
+
 if [ ! -c "$AT_PORT" ]; then
     warn "AT port $AT_PORT not present."
     warn "Available: $(ls /dev/ttyUSB* 2>/dev/null || echo 'none')"
@@ -189,9 +199,12 @@ fi
 if command -v fuser >/dev/null 2>&1; then
     if FUSER_OUT=$(fuser "$AT_PORT" 2>&1); then
         if [ -n "$FUSER_OUT" ] && echo "$FUSER_OUT" | grep -q '[0-9]'; then
-            warn "Port $AT_PORT is held by a process:"
+            warn "Port $AT_PORT is held by a process — may cause AT errors."
             warn "  $FUSER_OUT"
-            warn "This may interfere with AT commands."
+            if [ "$AT_PORT" = "/dev/ttyUSB2" ] && [ -c /dev/ttyUSB3 ]; then
+                info "Switching to /dev/ttyUSB3 (free secondary AT port)."
+                AT_PORT="/dev/ttyUSB3"
+            fi
         fi
     fi
 fi
@@ -338,6 +351,12 @@ if [ -f "$CONFIG_FILE" ]; then
 else
     cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
     ok "Default config written to $CONFIG_FILE"
+fi
+
+# Patch at_port in config to match the detected/selected AT port
+if [ -f "$CONFIG_FILE" ]; then
+    sed -i "s|^at_port *=.*|at_port = ${AT_PORT}|" "$CONFIG_FILE"
+    ok "AT port set to $AT_PORT in config.ini"
 fi
 
 # =============================================================================
