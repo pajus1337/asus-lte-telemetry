@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-04-25
+
+### Fixed
+
+- **`web/cgi-bin/api.cgi`** — all `function` definitions were inside rule blocks `{ }`,
+  which BusyBox awk rejects. Moved all `function n()` / `function s()` definitions to
+  top-level scope (before any `BEGIN`/rule blocks). Fixes `awk: cmd. line:4: Unexpected
+  token` errors that appeared on every dashboard refresh and caused empty/broken JSON.
+- **`install.sh`** — `PRAGMA journal_mode = WAL` in schema.sql outputs `wal` to stdout
+  when SQLite applies it. Added `>/dev/null` to all three `sqlite3 < schema.sql` calls
+  so the word `wal` no longer leaks into the install output.
+- **`install.sh`** — "Next steps" footer used `awk '/inet /{split($2,...)}` to print the
+  dashboard URL; BusyBox awk rejects this with `Unexpected token`. Replaced with
+  `grep -o 'inet [0-9.]*' | head -1 | sed 's/inet //'`.
+
 ## [0.4.7] - 2026-04-25
 
 ### Fixed

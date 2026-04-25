@@ -380,15 +380,15 @@ if [ -f "$DB_PATH" ]; then
         cp "$DB_PATH" "$BACKUP_PATH"
         ok "Backup saved: $BACKUP_PATH"
         rm -f "$DB_PATH"
-        /opt/bin/sqlite3 "$DB_PATH" < "$SCHEMA_PATH" || die "Schema creation failed"
+        /opt/bin/sqlite3 "$DB_PATH" < "$SCHEMA_PATH" >/dev/null || die "Schema creation failed"
         ok "Database recreated"
     else
         ok "Existing database kept"
         # Still run schema file — CREATE TABLE IF NOT EXISTS is safe
-        /opt/bin/sqlite3 "$DB_PATH" < "$SCHEMA_PATH" || warn "Schema apply failed (continuing)"
+        /opt/bin/sqlite3 "$DB_PATH" < "$SCHEMA_PATH" >/dev/null || warn "Schema apply failed (continuing)"
     fi
 else
-    /opt/bin/sqlite3 "$DB_PATH" < "$SCHEMA_PATH" || die "Schema creation failed"
+    /opt/bin/sqlite3 "$DB_PATH" < "$SCHEMA_PATH" >/dev/null || die "Schema creation failed"
     ok "Database created at $DB_PATH"
 fi
 
@@ -523,7 +523,7 @@ Next steps:
 
   4. Start the web dashboard:
        rmon web start
-       # then open http://$(ip addr show br0 2>/dev/null | awk '/inet /{split(\$2,a,"/");print a[1];exit}'):8080/
+       # then open http://$(ip addr show br0 2>/dev/null | grep -o 'inet [0-9.]*' | head -1 | sed 's/inet //'):8080/
 
   5. Tail the log:
        tail -f $INSTALL_BASE/logs/dispatcher.log

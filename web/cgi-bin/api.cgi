@@ -3,7 +3,7 @@
 # web/cgi-bin/api.cgi — current status JSON API
 # =============================================================================
 # Returns a single JSON object with all current telemetry state.
-# Served by BusyBox httpd; called by the dashboard every 30s.
+# Served by lighttpd; called by the dashboard every 30s.
 # =============================================================================
 
 _cgi_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
@@ -33,9 +33,10 @@ _sig_row=$("$SQLITE" -separator '|' "$DB_PATH" \
      FROM lte_samples ORDER BY ts DESC LIMIT 1;" 2>/dev/null)
 
 if [ -n "$_sig_row" ]; then
-    _sig_json=$(echo "$_sig_row" | awk -F'|' '{
-        function n(v) { return (v=="" ? "null" : v) }
-        function s(v) { return (v=="" ? "null" : "\"" v "\"") }
+    _sig_json=$(echo "$_sig_row" | awk -F'|' '
+    function n(v) { return (v=="" ? "null" : v) }
+    function s(v) { return (v=="" ? "null" : "\"" v "\"") }
+    {
         printf "{\"ts\":%s,\"rrc_state\":%s,\"rat\":%s,\"duplex\":%s,",
             n($1), s($2), s($3), s($4)
         printf "\"mcc\":%s,\"mnc\":%s,\"cell_id_hex\":%s,\"pci\":%s,",
@@ -59,10 +60,10 @@ if [ -n "$_ca_ts" ]; then
         "SELECT cc_type, cc_index, band, bandwidth, rsrp, rsrq, sinr
          FROM ca_samples WHERE ts = ${_ca_ts}
          ORDER BY cc_index;" 2>/dev/null | awk -F'|' '
+    function n(v) { return (v=="" ? "null" : v) }
+    function s(v) { return (v=="" ? "null" : "\"" v "\"") }
     BEGIN { printf "["; sep="" }
     {
-        function n(v) { return (v=="" ? "null" : v) }
-        function s(v) { return (v=="" ? "null" : "\"" v "\"") }
         printf "%s{\"type\":%s,\"index\":%s,\"band\":%s,\"bw\":%s,\"rsrp\":%s,\"rsrq\":%s,\"sinr\":%s}",
             sep, s($1), n($2), n($3), n($4), n($5), n($6), n($7)
         sep=","
@@ -82,8 +83,9 @@ _sys_row=$("$SQLITE" -separator '|' "$DB_PATH" \
      FROM system_samples ORDER BY ts DESC LIMIT 1;" 2>/dev/null)
 
 if [ -n "$_sys_row" ]; then
-    _sys_json=$(echo "$_sys_row" | awk -F'|' '{
-        function n(v) { return (v=="" ? "null" : v) }
+    _sys_json=$(echo "$_sys_row" | awk -F'|' '
+    function n(v) { return (v=="" ? "null" : v) }
+    {
         printf "{\"ts\":%s,\"uptime_sec\":%s,\"load_1min\":%s,\"load_5min\":%s,",
             n($1), n($2), n($3), n($4)
         printf "\"mem_used_kb\":%s,\"mem_total_kb\":%s,",
@@ -105,10 +107,10 @@ if [ -n "$_ping_ts" ]; then
         "SELECT target, target_label, loss_pct, rtt_avg_ms, rtt_min_ms, rtt_max_ms
          FROM ping_samples WHERE ts = ${_ping_ts}
          ORDER BY target_label;" 2>/dev/null | awk -F'|' '
+    function n(v) { return (v=="" ? "null" : v) }
+    function s(v) { return (v=="" ? "null" : "\"" v "\"") }
     BEGIN { printf "["; sep="" }
     {
-        function n(v) { return (v=="" ? "null" : v) }
-        function s(v) { return (v=="" ? "null" : "\"" v "\"") }
         printf "%s{\"target\":%s,\"label\":%s,\"loss_pct\":%s,\"rtt_avg_ms\":%s,\"rtt_min_ms\":%s,\"rtt_max_ms\":%s}",
             sep, s($1), s($2), n($3), n($4), n($5), n($6)
         sep=","
@@ -126,8 +128,9 @@ _temp_row=$("$SQLITE" -separator '|' "$DB_PATH" \
      FROM temp_samples ORDER BY ts DESC LIMIT 1;" 2>/dev/null)
 
 if [ -n "$_temp_row" ]; then
-    _temp_json=$(echo "$_temp_row" | awk -F'|' '{
-        function n(v) { return (v=="" ? "null" : v) }
+    _temp_json=$(echo "$_temp_row" | awk -F'|' '
+    function n(v) { return (v=="" ? "null" : v) }
+    {
         printf "{\"ts\":%s,\"xo_therm\":%s,\"mdm_case\":%s,\"pa_therm\":%s}",
             n($1), n($2), n($3), n($4)
     }')
@@ -142,9 +145,9 @@ _col_json=$("$SQLITE" -separator '|' "$DB_PATH" \
     "SELECT collector_name, last_run_ts, last_status, COALESCE(last_error,'')
      FROM collector_state ORDER BY collector_name;" 2>/dev/null | \
 awk -F'|' -v now="$_now" '
+function s(v) { return (v=="" ? "null" : "\"" v "\"") }
 BEGIN { printf "{"; sep="" }
 {
-    function s(v) { return (v=="" ? "null" : "\"" v "\"") }
     age = now - ($2+0)
     printf "%s%s:{\"last_run_ts\":%s,\"age_sec\":%s,\"status\":%s,\"error\":%s}",
         sep, s($1), ($2+0 > 0 ? $2 : "0"),
@@ -169,10 +172,10 @@ fi
 _ev_json=$("$SQLITE" -separator '|' "$DB_PATH" \
     "SELECT ts, event_type, severity, details
      FROM events ORDER BY ts DESC LIMIT 5;" 2>/dev/null | awk -F'|' '
+function s(v) { return (v=="" ? "null" : "\"" v "\"") }
+function n(v) { return (v=="" ? "null" : v) }
 BEGIN { printf "["; sep="" }
 {
-    function s(v) { return (v=="" ? "null" : "\"" v "\"") }
-    function n(v) { return (v=="" ? "null" : v) }
     det = $4; for (i=5; i<=NF; i++) det = det "|" $i
     printf "%s{\"ts\":%s,\"type\":%s,\"severity\":%s,\"details\":%s}",
         sep, n($1), s($2), s($3), (det=="" ? "null" : det)
