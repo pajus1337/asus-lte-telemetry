@@ -338,14 +338,34 @@ header {
 .cfg-val { font-weight: 600; font-size: 12px; word-break: break-all; text-align: right; }
 
 /* band control */
-.band-status {
-  font-size: 12px; color: var(--muted); margin-bottom: 10px;
+.band-layout {
+  display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;
 }
-.band-status strong { color: var(--text); }
-.band-status .locked-badge {
+.band-state-panel {
+  width: 190px; flex-shrink: 0;
+  background: rgba(15,23,42,.5); border: 1px solid var(--border);
+  border-radius: 7px; padding: 10px 12px;
+}
+.band-control-panel { flex: 1; min-width: 220px; }
+.band-state-section-title, .band-select-label {
+  font-size: 10px; font-weight: bold; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); margin-bottom: 7px;
+}
+.band-state-row { display: flex; flex-direction: column; margin-bottom: 8px; }
+.band-state-key { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+.band-state-mono {
+  font-family: monospace; font-size: 11px; color: var(--text); word-break: break-all;
+}
+.band-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.band-chip {
+  background: rgba(59,130,246,.15); color: #93c5fd;
+  border: 1px solid rgba(59,130,246,.3);
+  border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 600;
+}
+.locked-badge {
   display: inline-block; background: rgba(245,158,11,.15);
   color: #fbbf24; border: 1px solid rgba(245,158,11,.3);
-  border-radius: 4px; padding: 1px 6px; font-size: 11px; margin-left: 6px;
+  border-radius: 4px; padding: 1px 6px; font-size: 11px;
 }
 .band-grid {
   display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
@@ -518,20 +538,26 @@ header {
     <div class="card wide">
       <div class="card-title"><span class="card-title-text">Band Control</span></div>
       <div id="band-body">
-        <div class="band-status" id="band-status-line">
-          <span id="band-no-state">No band state cached — click <strong>Refresh</strong> to query modem.</span>
-        </div>
-        <div class="band-grid" id="band-grid"></div>
-        <div class="band-actions">
-          <button class="band-btn" id="band-lock-btn" onclick="bandLock()">Lock to selected</button>
-          <button class="band-btn danger" id="band-unlock-btn" onclick="bandUnlock()">Unlock (all bands)</button>
-          <button class="band-btn" id="band-refresh-btn" onclick="bandRefresh()">Refresh</button>
-          <div class="band-reboot-row">
-            <input type="checkbox" id="band-reboot-cb">
-            <label for="band-reboot-cb">Take effect after modem reboot only</label>
+        <div class="band-layout">
+          <div class="band-state-panel">
+            <div class="band-state-section-title">Current state</div>
+            <div id="band-state-content"><div class="empty">No data — click <strong>Refresh</strong>.</div></div>
+          </div>
+          <div class="band-control-panel">
+            <div class="band-select-label">Select bands to lock</div>
+            <div class="band-grid" id="band-grid"></div>
+            <div class="band-actions">
+              <button class="band-btn" onclick="bandLock()">Lock to selected</button>
+              <button class="band-btn danger" onclick="bandUnlock()">Unlock (all bands)</button>
+              <button class="band-btn" onclick="bandRefresh()">Refresh</button>
+              <div class="band-reboot-row">
+                <input type="checkbox" id="band-reboot-cb">
+                <label for="band-reboot-cb">Apply after modem reboot only</label>
+              </div>
+            </div>
+            <div class="band-msg" id="band-msg"></div>
           </div>
         </div>
-        <div class="band-msg" id="band-msg"></div>
       </div>
     </div>
   </div>
@@ -871,27 +897,47 @@ function updateEvents(events) {
 // updater — Band Control
 // ---------------------------------------------------------------------------
 function updateBands(bands) {
-  var statusLine = document.getElementById('band-status-line');
-  var grid       = document.getElementById('band-grid');
-  var noState    = document.getElementById('band-no-state');
+  var stateEl = document.getElementById('band-state-content');
+  var grid    = document.getElementById('band-grid');
 
   if (!bands || typeof bands !== 'object') {
-    if (noState) noState.style.display = '';
+    stateEl.innerHTML = '<div class="empty">No data — click <strong>Refresh</strong>.</div>';
     grid.innerHTML = '';
     return;
   }
-  if (noState) noState.style.display = 'none';
 
   var active = bands.active || [];
   var locked = bands.locked || false;
+  var html = '';
 
-  statusLine.innerHTML =
-    '<strong>LTE mask:</strong> ' + esc(bands.lte_mask || '—') +
+  html += '<div class="band-state-row">' +
+    '<span class="band-state-key">Status</span>' +
     (locked
-      ? ' <span class="locked-badge">LOCKED</span>'
-      : ' <span style="color:var(--muted);font-size:11px">(all bands)</span>') +
-    '<br><strong>Active bands:</strong> ' + esc(active.join(', ') || '—') +
-    (bands.original_mask ? ' <span style="color:var(--muted);font-size:10px">| original: ' + esc(bands.original_mask) + '</span>' : '');
+      ? '<span class="locked-badge">LOCKED</span>'
+      : '<span style="color:var(--green);font-size:12px">Unlocked</span>') +
+    '</div>';
+
+  html += '<div class="band-state-row">' +
+    '<span class="band-state-key">Active bands</span>' +
+    '<div class="band-chips">' +
+    (active.length > 0
+      ? active.map(function(b) { return '<span class="band-chip">' + esc(b) + '</span>'; }).join('')
+      : '<span style="color:var(--muted)">—</span>') +
+    '</div></div>';
+
+  html += '<div class="band-state-row">' +
+    '<span class="band-state-key">LTE mask</span>' +
+    '<span class="band-state-mono">' + esc(bands.lte_mask || '—') + '</span>' +
+    '</div>';
+
+  if (locked && bands.original_mask) {
+    html += '<div class="band-state-row">' +
+      '<span class="band-state-key">Original mask</span>' +
+      '<span class="band-state-mono" style="color:var(--muted)">' + esc(bands.original_mask) + '</span>' +
+      '</div>';
+  }
+
+  stateEl.innerHTML = html;
 
   grid.innerHTML = BAND_LIST.map(function(b) {
     var checked = active.indexOf(b.n) >= 0;
