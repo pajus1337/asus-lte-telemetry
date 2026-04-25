@@ -27,7 +27,7 @@ _now=$(/opt/bin/date +%s 2>/dev/null || date +%s)
 # signal — latest lte_samples row
 # ---------------------------------------------------------------------------
 _sig_row=$("$SQLITE" -separator '|' "$DB_PATH" \
-    "SELECT ts, rrc_state, rat, duplex, mcc, mnc, cell_id_hex, pci,
+    "SELECT ts, rrc_state, rat, duplex, mcc, mnc, cell_id_hex, cell_id_dec, pci,
             earfcn, band, rsrp, rsrq, rssi, sinr, cqi, tx_power,
             operator, net_type
      FROM lte_samples ORDER BY ts DESC LIMIT 1;" 2>/dev/null)
@@ -39,13 +39,13 @@ if [ -n "$_sig_row" ]; then
     {
         printf "{\"ts\":%s,\"rrc_state\":%s,\"rat\":%s,\"duplex\":%s,",
             n($1), s($2), s($3), s($4)
-        printf "\"mcc\":%s,\"mnc\":%s,\"cell_id_hex\":%s,\"pci\":%s,",
-            n($5), n($6), s($7), n($8)
+        printf "\"mcc\":%s,\"mnc\":%s,\"cell_id_hex\":%s,\"cell_id_dec\":%s,\"pci\":%s,",
+            n($5), n($6), s($7), n($8), n($9)
         printf "\"earfcn\":%s,\"band\":%s,\"rsrp\":%s,\"rsrq\":%s,",
-            n($9), n($10), n($11), n($12)
+            n($10), n($11), n($12), n($13)
         printf "\"rssi\":%s,\"sinr\":%s,\"cqi\":%s,\"tx_power\":%s,",
-            n($13), n($14), n($15), n($16)
-        printf "\"operator\":%s,\"net_type\":%s}", s($17), s($18)
+            n($14), n($15), n($16), n($17)
+        printf "\"operator\":%s,\"net_type\":%s}", s($18), s($19)
     }')
 else
     _sig_json="null"

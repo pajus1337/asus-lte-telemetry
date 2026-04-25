@@ -236,7 +236,14 @@ header {
 <body>
 
 <header>
-  <div class="h-title">asus-lte-telemetry</div>
+  <div class="h-title">
+    <svg viewBox="0 0 20 16" width="18" height="14" style="vertical-align:middle;margin-right:7px" fill="none">
+      <circle cx="10" cy="15" r="1.8" fill="#3b82f6"/>
+      <path d="M6.2 11.8a5.5 5.5 0 0 1 7.6 0" stroke="#3b82f6" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M3.4 9a10 10 0 0 1 13.2 0" stroke="#3b82f6" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M0.6 6.2a14.5 14.5 0 0 1 18.8 0" stroke="#3b82f6" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>asus-lte-telemetry
+  </div>
   <div class="h-right">
     <span id="mode-badge" class="mode-badge mode-normal">normal</span>
     <span id="status-dot" class="dot"></span>
@@ -352,6 +359,21 @@ function qSinr(v) {
   if (v >= 0)  return 'fair';
   return 'poor';
 }
+function qRsrq(v) {
+  if (v == null) return 'unknown';
+  if (v >= -5)  return 'excellent';
+  if (v >= -10) return 'good';
+  if (v >= -15) return 'fair';
+  if (v >= -20) return 'poor';
+  return 'vp';
+}
+function qTxPower(v) {
+  if (v == null) return 'unknown';
+  if (v < 0)   return 'excellent';
+  if (v < 10)  return 'good';
+  if (v < 18)  return 'fair';
+  return 'poor';
+}
 const Q_LABEL = {excellent:'Excellent', good:'Good', fair:'Fair', poor:'Poor', vp:'Very Poor', unknown:'—'};
 const Q_COLOR = {excellent:'#22c55e', good:'#86efac', fair:'#f59e0b', poor:'#f97316', vp:'#ef4444', unknown:'#94a3b8'};
 
@@ -384,10 +406,32 @@ function row(label, valHtml) {
 // ---------------------------------------------------------------------------
 // section updaters
 // ---------------------------------------------------------------------------
+function cellMapperUrl(sig) {
+  if (!sig || !sig.mcc || !sig.mnc) return null;
+  const dec = sig.cell_id_dec != null ? sig.cell_id_dec
+            : (sig.cell_id_hex ? parseInt(sig.cell_id_hex, 16) : null);
+  if (dec == null) return null;
+  return 'https://www.cellmapper.net/map#?type=LTE&mcc=' + sig.mcc +
+         '&mnc=' + sig.mnc + '&cell=' + dec +
+         (sig.pci != null ? '&physical_cell_id=' + sig.pci : '') + '&zoom=15';
+}
+
 function updateSignal(sig) {
   const el = document.getElementById('sig-body');
   if (!sig) { el.innerHTML = '<div class="empty">No LTE data yet.</div>'; return; }
-  const qr = qRsrp(sig.rsrp), qs = qSinr(sig.sinr);
+  const qr = qRsrp(sig.rsrp), qs = qSinr(sig.sinr), qq = qRsrq(sig.rsrq), qt = qTxPower(sig.tx_power);
+
+  const dec = sig.cell_id_dec != null ? sig.cell_id_dec
+            : (sig.cell_id_hex ? parseInt(sig.cell_id_hex, 16) : null);
+  const cmUrl = cellMapperUrl(sig);
+  const cellLabel = (sig.cell_id_hex || '—') +
+    (dec != null ? ' <span style="color:var(--muted);font-size:11px">('+dec+')</span>' : '');
+  const cellVal = cmUrl
+    ? cellLabel + ' / ' + esc(sig.pci != null ? sig.pci : '—') +
+      ' <a href="' + cmUrl + '" target="_blank" rel="noopener" ' +
+      'style="color:var(--accent);font-size:11px;text-decoration:none;margin-left:4px" title="Open in CellMapper">&#8599;</a>'
+    : cellLabel + ' / ' + esc(sig.pci != null ? sig.pci : '—');
+
   el.innerHTML =
     row('Operator', esc(sig.operator || '—')) +
     row('Band', esc(sig.band ? 'B'+sig.band+' '+sig.duplex+' '+sig.rat : '—')) +
@@ -395,12 +439,15 @@ function updateSignal(sig) {
     row('RSRP',
       '<span class="q-'+qr+'">' + (sig.rsrp != null ? sig.rsrp+' dBm' : '—') + '</span>' +
       '<span class="qbadge b-'+qr+'">'+Q_LABEL[qr]+'</span>') +
-    row('RSRQ', sig.rsrq != null ? sig.rsrq+' dB' : '—') +
+    row('RSRQ',
+      '<span class="q-'+qq+'">' + (sig.rsrq != null ? sig.rsrq+' dB' : '—') + '</span>' +
+      '<span class="qbadge b-'+qq+'">'+Q_LABEL[qq]+'</span>') +
     row('SINR',
       '<span class="q-'+qs+'">' + (sig.sinr != null ? sig.sinr+' dB' : '—') + '</span>' +
       '<span class="qbadge b-'+qs+'">'+Q_LABEL[qs]+'</span>') +
-    row('Cell / PCI',
-      esc(sig.cell_id_hex || '—') + ' / ' + esc(sig.pci != null ? sig.pci : '—')) +
+    row('TX Power',
+      '<span class="q-'+qt+'">' + (sig.tx_power != null ? sig.tx_power+' dBm' : '—') + '</span>') +
+    '<div class="row"><span class="lbl">Cell / PCI</span><span class="val" style="font-size:12px">' + cellVal + '</span></div>' +
     row('EARFCN', esc(sig.earfcn || '—'));
 }
 
@@ -567,6 +614,7 @@ function drawChart(hd) {
   const lastV = vals[vals.length - 1];
   const color = chartMetric === 'rsrp' ? Q_COLOR[qRsrp(lastV)]
               : chartMetric === 'sinr' ? Q_COLOR[qSinr(lastV)]
+              : chartMetric === 'rsrq' ? Q_COLOR[qRsrq(lastV)]
               : '#3b82f6';
 
   // polyline
