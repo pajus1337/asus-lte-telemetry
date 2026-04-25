@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.9] - 2026-04-25
+
+### Fixed
+
+- **`lib/common.sh` `check_dependency`** — used `command -v` on a full path such as
+  `/opt/bin/sqlite3`. BusyBox ash only resolves `command -v` against `$PATH`; in nohup
+  and init contexts `/opt/bin/` is often absent from PATH, causing a false "not found"
+  even when the binary exists. Now uses `[ -x CMD ]` for full-path arguments and
+  `command -v` only for bare names. Fixes the persistent "Required command
+  '/opt/bin/sqlite3' not found" dispatcher crash.
+- **`bin/at-send`** — the router OS uses ttyUSB3 periodically for its own AT commands,
+  leaving buffered garbage (including `ERROR` lines) in the kernel serial port buffer.
+  Added a 0.2s drain step before the capture window to flush stale data. After capture,
+  the response is now trimmed to start from the modem's echo of our command (using
+  `awk index()`), discarding any pre-echo garbage. This fixes "AT collection failed"
+  caused by stray `ERROR` lines in the buffer tripping the `^ERROR` check in `at_cmd`.
+
 ## [0.4.8] - 2026-04-25
 
 ### Fixed

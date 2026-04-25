@@ -173,12 +173,24 @@ die() {
 }
 
 # check_dependency CMD [PACKAGE_HINT]
+# For full paths (starting with /) uses [ -x ]; for bare names uses command -v.
+# BusyBox ash's command -v does not find full-path binaries when the containing
+# directory is absent from PATH (common in nohup/init environments).
 check_dependency() {
     _cmd="$1"
     _hint="${2:-$1}"
-    if ! command -v "$_cmd" >/dev/null 2>&1; then
-        die "Required command '${_cmd}' not found. Install: opkg install ${_hint}"
-    fi
+    case "$_cmd" in
+        /*)
+            if [ ! -x "$_cmd" ]; then
+                die "Required command '${_cmd}' not found. Install: opkg install ${_hint}"
+            fi
+            ;;
+        *)
+            if ! command -v "$_cmd" >/dev/null 2>&1; then
+                die "Required command '${_cmd}' not found. Install: opkg install ${_hint}"
+            fi
+            ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------

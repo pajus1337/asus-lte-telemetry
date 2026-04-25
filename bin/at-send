@@ -74,7 +74,16 @@ fi
 TMP=$("$MKTEMP_BIN" /tmp/at-send.XXXXXX)
 trap 'rm -f "$TMP"' EXIT INT TERM
 
-# Start background reader
+# Flush stale data from the serial port's kernel receive buffer.
+# Other router processes may write AT commands to this port periodically,
+# leaving buffered garbage (including ERROR lines) that would corrupt our read.
+cat "$PORT" > /dev/null 2>/dev/null &
+_DRAIN_PID=$!
+"$SLEEP_BIN" 0.2
+kill "$_DRAIN_PID" 2>/dev/null
+wait "$_DRAIN_PID" 2>/dev/null
+
+# Start background reader (after drain, buffer is mostly clean)
 cat "$PORT" > "$TMP" 2>/dev/null &
 CAT_PID=$!
 
@@ -91,7 +100,20 @@ printf '%s\r' "$CMD" > "$PORT"
 kill "$CAT_PID" 2>/dev/null
 wait "$CAT_PID" 2>/dev/null
 
-# Emit captured response
-cat "$TMP"
+# Emit response starting from our command echo.
+# The modem echoes back what we write (ATE1 default). Any data captured
+# before the echo is buffered garbage from other port users — discard it.
+# Falls back to full output if no echo is found (ATE0 / echo disabled).
+_after_echo=$(awk -v cmd="$CMD" '
+BEGIN { past=0 }
+past { print; next }
+index($0, cmd) > 0 { past=1 }
+' "$TMP")
+
+if [ -n "$_after_echo" ]; then
+    printf '%s\n' "$_after_echo"
+else
+    cat "$TMP"
+fi
 
 exit 0
