@@ -26,6 +26,8 @@ body {
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* header */
 header {
   display: flex;
   justify-content: space-between;
@@ -35,7 +37,7 @@ header {
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -44,6 +46,9 @@ header {
   font-weight: bold;
   color: var(--accent);
   letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .h-right {
   display: flex;
@@ -73,6 +78,43 @@ header {
 }
 .dot.online  { background: var(--green); }
 .dot.offline { background: var(--red); }
+
+/* tabs */
+.tabs {
+  display: flex;
+  background: var(--card);
+  border-bottom: 2px solid var(--border);
+  padding: 0 16px;
+  position: sticky;
+  top: 45px;
+  z-index: 10;
+  gap: 0;
+  overflow-x: auto;
+}
+.tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* tab panes */
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* grid */
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -82,6 +124,8 @@ header {
   margin: 0 auto;
 }
 @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+
+/* cards */
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -103,6 +147,8 @@ header {
   gap: 10px;
 }
 .card-title-text { flex: 1; }
+
+/* rows */
 .row {
   display: flex;
   justify-content: space-between;
@@ -112,6 +158,8 @@ header {
 }
 .lbl { color: var(--muted); white-space: nowrap; }
 .val { font-weight: 600; text-align: right; }
+
+/* quality badges */
 .qbadge {
   font-size: 10px;
   font-weight: bold;
@@ -126,11 +174,15 @@ header {
 .q-fair      { color: var(--amber); }
 .q-poor      { color: var(--orange); }
 .q-vp        { color: var(--red); }
-.b-excellent { background: rgba(34,197,94,.15);  color: var(--green); }
-.b-good      { background: rgba(134,239,172,.15);color: var(--lime); }
-.b-fair      { background: rgba(245,158,11,.15); color: var(--amber); }
-.b-poor      { background: rgba(249,115,22,.15); color: var(--orange); }
-.b-vp        { background: rgba(239,68,68,.15);  color: var(--red); }
+.q-unknown   { color: var(--muted); }
+.b-excellent { background: rgba(34,197,94,.15);   color: var(--green); }
+.b-good      { background: rgba(134,239,172,.15); color: var(--lime); }
+.b-fair      { background: rgba(245,158,11,.15);  color: var(--amber); }
+.b-poor      { background: rgba(249,115,22,.15);  color: var(--orange); }
+.b-vp        { background: rgba(239,68,68,.15);   color: var(--red); }
+.b-unknown   { background: rgba(148,163,184,.1);  color: var(--muted); }
+
+/* bar */
 .bar-wrap {
   height: 5px;
   background: var(--border);
@@ -145,6 +197,8 @@ header {
   background: var(--accent);
   transition: width .4s ease;
 }
+
+/* ping */
 .ping-row {
   display: flex;
   justify-content: space-between;
@@ -158,48 +212,61 @@ header {
 .ping-loss-ok   { color: var(--green); }
 .ping-loss-warn { color: var(--amber); }
 .ping-loss-bad  { color: var(--red); }
-.ev-row {
-  display: flex;
-  gap: 10px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  flex-wrap: wrap;
-}
-.ev-row:last-child { border-bottom: none; }
-.ev-time   { color: var(--muted); white-space: nowrap; }
-.ev-type   { font-weight: bold; white-space: nowrap; }
-.ev-info     { color: var(--accent); }
-.ev-warning  { color: var(--amber); }
-.ev-critical { color: var(--red); }
-.ev-det { color: var(--muted); font-size: 11px; word-break: break-all; }
+
+/* collectors */
 .col-row {
   display: flex;
   justify-content: space-between;
   padding: 2px 0;
   gap: 12px;
 }
-.col-name { color: var(--muted); }
-.col-ok      { color: var(--green); }
-.col-error   { color: var(--red); }
-.col-never   { color: var(--border); }
-.empty { color: var(--muted); font-style: italic; padding: 4px 0; }
-/* neighbours */
-.neigh-table {
-  width: 100%;
-  border-collapse: collapse;
+.col-name  { color: var(--muted); }
+.col-ok    { color: var(--green); }
+.col-error { color: var(--red); }
+.col-never { color: var(--border); }
+
+/* events */
+.ev-row {
+  display: flex;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
+  flex-wrap: wrap;
+  align-items: baseline;
 }
+.ev-row:last-child { border-bottom: none; }
+.ev-time     { color: var(--muted); white-space: nowrap; min-width: 130px; }
+.ev-type     { font-weight: bold; white-space: nowrap; }
+.ev-info     { color: var(--accent); }
+.ev-warning  { color: var(--amber); }
+.ev-critical { color: var(--red); }
+.ev-det      { color: var(--muted); font-size: 11px; word-break: break-all; }
+.ev-sev-badge {
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+.sev-info     { background: rgba(59,130,246,.15);  color: #93c5fd; }
+.sev-warning  { background: rgba(245,158,11,.15);  color: var(--amber); }
+.sev-critical { background: rgba(239,68,68,.15);   color: var(--red); }
+
+/* neighbours */
+.neigh-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .neigh-table th {
   color: var(--muted);
   font-weight: normal;
   text-align: left;
-  padding: 2px 8px 6px 0;
+  padding: 2px 10px 6px 0;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
 .neigh-table td {
-  padding: 3px 8px 3px 0;
+  padding: 4px 10px 4px 0;
   border-bottom: 1px solid rgba(51,65,85,.4);
   white-space: nowrap;
 }
@@ -212,11 +279,12 @@ header {
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
-.nt-intra { background: rgba(59,130,246,.15); color: #93c5fd; }
-.nt-inter { background: rgba(245,158,11,.15); color: #fcd34d; }
-.nt-wcdma { background: rgba(147,51,234,.15); color: #c084fc; }
-.nt-gsm   { background: rgba(100,116,139,.15);color: #94a3b8; }
+.nt-intra { background: rgba(59,130,246,.15);  color: #93c5fd; }
+.nt-inter { background: rgba(245,158,11,.15);  color: #fcd34d; }
+.nt-wcdma { background: rgba(147,51,234,.15);  color: #c084fc; }
+.nt-gsm   { background: rgba(100,116,139,.15); color: #94a3b8; }
 .neigh-summary { color: var(--muted); font-size: 11px; margin-left: auto; }
+
 /* chart */
 .chart-controls {
   display: flex;
@@ -224,10 +292,7 @@ header {
   align-items: center;
   flex-wrap: wrap;
 }
-.chart-btn-group {
-  display: flex;
-  gap: 4px;
-}
+.chart-btn-group { display: flex; gap: 4px; }
 .chart-btn {
   background: transparent;
   border: 1px solid var(--border);
@@ -241,13 +306,11 @@ header {
   letter-spacing: 0.3px;
   transition: background .15s, color .15s, border-color .15s;
 }
-.chart-btn:hover { border-color: var(--accent); color: var(--text); }
+.chart-btn:hover  { border-color: var(--accent); color: var(--text); }
 .chart-btn.active { background: rgba(59,130,246,.2); border-color: var(--accent); color: #93c5fd; }
-.chart-wrap {
-  margin-top: 10px;
-  width: 100%;
-}
-.chart-wrap svg { display: block; width: 100%; height: 190px; }
+.chart-wrap { margin-top: 10px; width: 100%; }
+.chart-wrap svg { display: block; width: 100%; height: 200px; }
+
 /* config */
 .cfg-grid {
   display: grid;
@@ -264,18 +327,21 @@ header {
 .cfg-item:last-child { border-bottom: none; }
 .cfg-key { color: var(--muted); font-size: 12px; }
 .cfg-val { font-weight: 600; font-size: 12px; word-break: break-all; text-align: right; }
+
+.empty { color: var(--muted); font-style: italic; padding: 4px 0; }
 </style>
 </head>
 <body>
 
 <header>
   <div class="h-title">
-    <svg viewBox="0 0 20 16" width="18" height="14" style="vertical-align:middle;margin-right:7px" fill="none">
+    <svg viewBox="0 0 20 16" width="18" height="14" fill="none">
       <circle cx="10" cy="15" r="1.8" fill="#3b82f6"/>
       <path d="M6.2 11.8a5.5 5.5 0 0 1 7.6 0" stroke="#3b82f6" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M3.4 9a10 10 0 0 1 13.2 0" stroke="#3b82f6" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M0.6 6.2a14.5 14.5 0 0 1 18.8 0" stroke="#3b82f6" stroke-width="1.6" stroke-linecap="round"/>
-    </svg>asus-lte-telemetry
+    </svg>
+    asus-lte-telemetry
   </div>
   <div class="h-right">
     <span id="mode-badge" class="mode-badge mode-normal">normal</span>
@@ -285,106 +351,144 @@ header {
   </div>
 </header>
 
-<div class="grid">
+<nav class="tabs">
+  <button class="tab active" data-tab="overview">Overview</button>
+  <button class="tab" data-tab="signal">Signal</button>
+  <button class="tab" data-tab="events">Events</button>
+  <button class="tab" data-tab="config">Config</button>
+</nav>
 
-  <!-- Signal -->
-  <div class="card">
-    <div class="card-title"><span class="card-title-text">Signal</span></div>
-    <div id="sig-body"><div class="empty">No LTE data yet.</div></div>
-  </div>
+<!-- ========== TAB: Overview ========== -->
+<div id="tab-overview" class="tab-pane active">
+  <div class="grid">
 
-  <!-- CA -->
-  <div class="card">
-    <div class="card-title"><span class="card-title-text">Carrier Aggregation</span></div>
-    <div id="ca-body"><div class="empty">No CA data.</div></div>
-  </div>
-
-  <!-- Neighbours -->
-  <div class="card wide">
-    <div class="card-title">
-      <span class="card-title-text">Neighbour Cells</span>
-      <span class="neigh-summary" id="neigh-summary"></span>
+    <div class="card">
+      <div class="card-title"><span class="card-title-text">Signal</span></div>
+      <div id="sig-body"><div class="empty">No LTE data yet.</div></div>
     </div>
-    <div id="neigh-body"><div class="empty">No neighbour data.</div></div>
-  </div>
 
-  <!-- History Chart -->
-  <div class="card wide">
-    <div class="card-title">
-      <span class="card-title-text">Signal History</span>
-      <div class="chart-controls">
-        <div class="chart-btn-group" id="metric-btns">
-          <button class="chart-btn active" data-metric="rsrp">RSRP</button>
-          <button class="chart-btn" data-metric="sinr">SINR</button>
-          <button class="chart-btn" data-metric="rsrq">RSRQ</button>
-          <button class="chart-btn" data-metric="rssi">RSSI</button>
+    <div class="card">
+      <div class="card-title"><span class="card-title-text">Carrier Aggregation</span></div>
+      <div id="ca-body"><div class="empty">No CA data.</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-text">System</span></div>
+      <div id="sys-body"><div class="empty">No system data yet.</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-text">Ping</span></div>
+      <div id="ping-body"><div class="empty">No ping data yet.</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-text">Collectors</span></div>
+      <div id="col-body"><div class="empty">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-text">Modem Temp</span></div>
+      <div id="temp-body"><div class="empty">No temp data.</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ========== TAB: Signal ========== -->
+<div id="tab-signal" class="tab-pane">
+  <div class="grid">
+
+    <div class="card wide">
+      <div class="card-title">
+        <span class="card-title-text">Signal History</span>
+        <div class="chart-controls">
+          <div class="chart-btn-group" id="metric-btns">
+            <button class="chart-btn active" data-metric="rsrp">RSRP</button>
+            <button class="chart-btn" data-metric="sinr">SINR</button>
+            <button class="chart-btn" data-metric="rsrq">RSRQ</button>
+            <button class="chart-btn" data-metric="rssi">RSSI</button>
+          </div>
+          <div class="chart-btn-group" id="hours-btns">
+            <button class="chart-btn" data-hours="6">6h</button>
+            <button class="chart-btn active" data-hours="24">24h</button>
+            <button class="chart-btn" data-hours="72">3d</button>
+            <button class="chart-btn" data-hours="168">7d</button>
+          </div>
+          <span id="chart-info" style="color:var(--muted);font-size:11px"></span>
         </div>
-        <div class="chart-btn-group" id="hours-btns">
-          <button class="chart-btn" data-hours="6">6h</button>
-          <button class="chart-btn active" data-hours="24">24h</button>
-          <button class="chart-btn" data-hours="72">3d</button>
-          <button class="chart-btn" data-hours="168">7d</button>
-        </div>
-        <span id="chart-info" style="color:var(--muted);font-size:11px"></span>
+      </div>
+      <div class="chart-wrap" id="chart-wrap">
+        <div class="empty">Switch to this tab to load chart.</div>
       </div>
     </div>
-    <div class="chart-wrap" id="chart-wrap">
-      <div class="empty">Loading chart…</div>
+
+    <div class="card wide">
+      <div class="card-title">
+        <span class="card-title-text">Neighbour Cells</span>
+        <span class="neigh-summary" id="neigh-summary"></span>
+      </div>
+      <div id="neigh-body"><div class="empty">No neighbour data.</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ========== TAB: Events ========== -->
+<div id="tab-events" class="tab-pane">
+  <div class="grid">
+    <div class="card wide">
+      <div class="card-title">
+        <span class="card-title-text">Events</span>
+        <span id="ev-count" style="color:var(--muted);font-size:11px;margin-left:auto"></span>
+      </div>
+      <div id="ev-body"><div class="empty">(none)</div></div>
     </div>
   </div>
+</div>
 
-  <!-- System -->
-  <div class="card">
-    <div class="card-title"><span class="card-title-text">System</span></div>
-    <div id="sys-body"><div class="empty">No system data yet.</div></div>
+<!-- ========== TAB: Config ========== -->
+<div id="tab-config" class="tab-pane">
+  <div class="grid">
+    <div class="card wide">
+      <div class="card-title"><span class="card-title-text">Configuration</span></div>
+      <div id="cfg-body"><div class="empty">—</div></div>
+    </div>
   </div>
-
-  <!-- Ping -->
-  <div class="card">
-    <div class="card-title"><span class="card-title-text">Ping</span></div>
-    <div id="ping-body"><div class="empty">No ping data yet.</div></div>
-  </div>
-
-  <!-- Collectors -->
-  <div class="card">
-    <div class="card-title"><span class="card-title-text">Collectors</span></div>
-    <div id="col-body"><div class="empty">—</div></div>
-  </div>
-
-  <!-- Temp -->
-  <div class="card">
-    <div class="card-title"><span class="card-title-text">Temp</span></div>
-    <div id="temp-body"><div class="empty">No temp data.</div></div>
-  </div>
-
-  <!-- Config -->
-  <div class="card wide">
-    <div class="card-title"><span class="card-title-text">Configuration</span></div>
-    <div id="cfg-body"><div class="empty">—</div></div>
-  </div>
-
-  <!-- Events -->
-  <div class="card wide">
-    <div class="card-title"><span class="card-title-text">Recent Events</span></div>
-    <div id="ev-body"><div class="empty">(none)</div></div>
-  </div>
-
 </div>
 
 <script>
 'use strict';
 
-const REFRESH  = 30;
-const API      = 'cgi-bin/api.cgi';
-const HIST     = 'cgi-bin/history.cgi';
-let countdown  = REFRESH;
-let ticker     = null;
-
+const REFRESH = 30;
+const API     = 'cgi-bin/api.cgi';
+const HIST    = 'cgi-bin/history.cgi';
+let countdown = REFRESH;
+let ticker    = null;
 let chartMetric = 'rsrp';
 let chartHours  = 24;
+let chartLoaded = false;
 
 // ---------------------------------------------------------------------------
-// signal quality helpers
+// tabs
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.tab').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelectorAll('.tab-pane').forEach(function(p){ p.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'signal' && !chartLoaded) fetchChart();
+  });
+});
+
+function activeTab() {
+  var t = document.querySelector('.tab.active');
+  return t ? t.dataset.tab : 'overview';
+}
+
+// ---------------------------------------------------------------------------
+// quality helpers
 // ---------------------------------------------------------------------------
 function qRsrp(v) {
   if (v == null) return 'unknown';
@@ -411,47 +515,50 @@ function qRsrq(v) {
 }
 function qTxPower(v) {
   if (v == null) return 'unknown';
-  if (v < 0)   return 'excellent';
-  if (v < 10)  return 'good';
-  if (v < 18)  return 'fair';
+  if (v < 0)  return 'excellent';
+  if (v < 10) return 'good';
+  if (v < 18) return 'fair';
   return 'poor';
 }
+
 const Q_LABEL = {excellent:'Excellent', good:'Good', fair:'Fair', poor:'Poor', vp:'Very Poor', unknown:'—'};
 const Q_COLOR = {excellent:'#22c55e', good:'#86efac', fair:'#f59e0b', poor:'#f97316', vp:'#ef4444', unknown:'#94a3b8'};
 
 function fmtUptime(s) {
   if (!s) return '—';
-  const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60);
+  var d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60);
   if (d > 0) return d + 'd ' + h + 'h';
   if (h > 0) return h + 'h ' + m + 'm';
   return m + 'm';
 }
-
 function fmtAge(ts) {
   if (!ts || ts === '0' || ts === 0) return 'never';
-  const d = Math.floor(Date.now()/1000) - (+ts);
+  var d = Math.floor(Date.now()/1000) - (+ts);
   if (d < 60)    return d + 's ago';
   if (d < 3600)  return Math.floor(d/60) + 'm ago';
   if (d < 86400) return Math.floor(d/3600) + 'h ' + Math.floor((d%3600)/60) + 'm ago';
   return Math.floor(d/86400) + 'd ago';
 }
-
+function fmtTs(ts) {
+  if (!ts) return '—';
+  return new Date(ts * 1000).toLocaleString();
+}
 function esc(s) {
   if (s == null) return '—';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
 function row(label, valHtml) {
   return '<div class="row"><span class="lbl">' + esc(label) + '</span><span class="val">' + valHtml + '</span></div>';
 }
+function pad2(n) { return n < 10 ? '0' + n : String(n); }
 
 // ---------------------------------------------------------------------------
-// section updaters
+// updaters — Overview
 // ---------------------------------------------------------------------------
 function cellMapperUrl(sig) {
   if (!sig || !sig.mcc || !sig.mnc) return null;
-  const dec = sig.cell_id_dec != null ? sig.cell_id_dec
-            : (sig.cell_id_hex ? parseInt(sig.cell_id_hex, 16) : null);
+  var dec = sig.cell_id_dec != null ? sig.cell_id_dec
+          : (sig.cell_id_hex ? parseInt(sig.cell_id_hex, 16) : null);
   if (dec == null) return null;
   return 'https://www.cellmapper.net/map#?type=LTE&mcc=' + sig.mcc +
          '&mnc=' + sig.mnc + '&cell=' + dec +
@@ -459,132 +566,131 @@ function cellMapperUrl(sig) {
 }
 
 function updateSignal(sig) {
-  const el = document.getElementById('sig-body');
+  var el = document.getElementById('sig-body');
   if (!sig) { el.innerHTML = '<div class="empty">No LTE data yet.</div>'; return; }
-  const qr = qRsrp(sig.rsrp), qs = qSinr(sig.sinr), qq = qRsrq(sig.rsrq), qt = qTxPower(sig.tx_power);
-
-  const dec = sig.cell_id_dec != null ? sig.cell_id_dec
-            : (sig.cell_id_hex ? parseInt(sig.cell_id_hex, 16) : null);
-  const cmUrl = cellMapperUrl(sig);
-  const cellLabel = (sig.cell_id_hex || '—') +
-    (dec != null ? ' <span style="color:var(--muted);font-size:11px">('+dec+')</span>' : '');
-  const cellVal = cmUrl
+  var qr = qRsrp(sig.rsrp), qs = qSinr(sig.sinr), qq = qRsrq(sig.rsrq), qt = qTxPower(sig.tx_power);
+  var dec = sig.cell_id_dec != null ? sig.cell_id_dec
+          : (sig.cell_id_hex ? parseInt(sig.cell_id_hex, 16) : null);
+  var cmUrl = cellMapperUrl(sig);
+  var cellLabel = esc(sig.cell_id_hex || '—') +
+    (dec != null ? ' <span style="color:var(--muted);font-size:11px">(' + dec + ')</span>' : '');
+  var cellVal = cmUrl
     ? cellLabel + ' / ' + esc(sig.pci != null ? sig.pci : '—') +
-      ' <a href="' + cmUrl + '" target="_blank" rel="noopener" ' +
-      'style="color:var(--accent);font-size:11px;text-decoration:none;margin-left:4px" title="Open in CellMapper">&#8599;</a>'
+      ' <a href="' + cmUrl + '" target="_blank" rel="noopener"' +
+      ' style="color:var(--accent);font-size:11px;text-decoration:none;margin-left:4px"' +
+      ' title="Open in CellMapper">&#8599;</a>'
     : cellLabel + ' / ' + esc(sig.pci != null ? sig.pci : '—');
 
   el.innerHTML =
     row('Operator', esc(sig.operator || '—')) +
-    row('Band', esc(sig.band ? 'B'+sig.band+' '+sig.duplex+' '+sig.rat : '—')) +
-    row('RRC',  esc(sig.rrc_state || '—')) +
+    row('Band', esc(sig.band ? 'B' + sig.band + ' ' + sig.duplex + ' ' + sig.rat : '—')) +
+    row('RRC', esc(sig.rrc_state || '—')) +
     row('RSRP',
-      '<span class="q-'+qr+'">' + (sig.rsrp != null ? sig.rsrp+' dBm' : '—') + '</span>' +
-      '<span class="qbadge b-'+qr+'">'+Q_LABEL[qr]+'</span>') +
+      '<span class="q-' + qr + '">' + (sig.rsrp != null ? sig.rsrp + ' dBm' : '—') + '</span>' +
+      '<span class="qbadge b-' + qr + '">' + Q_LABEL[qr] + '</span>') +
     row('RSRQ',
-      '<span class="q-'+qq+'">' + (sig.rsrq != null ? sig.rsrq+' dB' : '—') + '</span>' +
-      '<span class="qbadge b-'+qq+'">'+Q_LABEL[qq]+'</span>') +
+      '<span class="q-' + qq + '">' + (sig.rsrq != null ? sig.rsrq + ' dB' : '—') + '</span>' +
+      '<span class="qbadge b-' + qq + '">' + Q_LABEL[qq] + '</span>') +
     row('SINR',
-      '<span class="q-'+qs+'">' + (sig.sinr != null ? sig.sinr+' dB' : '—') + '</span>' +
-      '<span class="qbadge b-'+qs+'">'+Q_LABEL[qs]+'</span>') +
-    row('TX Power',
-      '<span class="q-'+qt+'">' + (sig.tx_power != null ? sig.tx_power+' dBm' : '—') + '</span>') +
+      '<span class="q-' + qs + '">' + (sig.sinr != null ? sig.sinr + ' dB' : '—') + '</span>' +
+      '<span class="qbadge b-' + qs + '">' + Q_LABEL[qs] + '</span>') +
+    row('TX Power', '<span class="q-' + qt + '">' + (sig.tx_power != null ? sig.tx_power + ' dBm' : '—') + '</span>') +
     '<div class="row"><span class="lbl">Cell / PCI</span><span class="val" style="font-size:12px">' + cellVal + '</span></div>' +
     row('EARFCN', esc(sig.earfcn || '—'));
 }
 
 function updateCA(ca) {
-  const el = document.getElementById('ca-body');
+  var el = document.getElementById('ca-body');
   if (!ca || ca.length === 0) {
     el.innerHTML = '<div class="empty">No carrier aggregation active.</div>';
     return;
   }
-  let html = row('Carriers', String(ca.length));
+  var html = row('Carriers', String(ca.length));
   ca.forEach(function(c) {
     html += row(
-      (c.type||'?').toUpperCase() + ' B' + (c.band||'?'),
-      esc(c.rsrp != null ? c.rsrp+' dBm' : '—') + ' / SINR ' + esc(c.sinr != null ? c.sinr+' dB' : '—')
+      (c.type || '?').toUpperCase() + ' B' + (c.band || '?'),
+      esc(c.rsrp != null ? c.rsrp + ' dBm' : '—') + ' / SINR ' + esc(c.sinr != null ? c.sinr + ' dB' : '—')
     );
   });
   el.innerHTML = html;
 }
 
 function updateSystem(sys) {
-  const el = document.getElementById('sys-body');
+  var el = document.getElementById('sys-body');
   if (!sys) { el.innerHTML = '<div class="empty">No system data yet.</div>'; return; }
-  const memPct  = sys.mem_total_kb  > 0 ? Math.round(sys.mem_used_kb  / sys.mem_total_kb  * 100) : 0;
-  const swapPct = sys.swap_total_kb > 0 ? Math.round(sys.swap_used_kb / sys.swap_total_kb * 100) : 0;
-  const diskPct = sys.disk_data_pct || 0;
+  var memPct  = sys.mem_total_kb  > 0 ? Math.round(sys.mem_used_kb  / sys.mem_total_kb  * 100) : 0;
+  var swapPct = sys.swap_total_kb > 0 ? Math.round(sys.swap_used_kb / sys.swap_total_kb * 100) : 0;
+  var diskPct = sys.disk_data_pct || 0;
   function bar(pct) {
-    return '<div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%"></div></div>';
+    var col = pct > 85 ? 'var(--red)' : pct > 65 ? 'var(--amber)' : 'var(--accent)';
+    return '<div class="bar-wrap"><div class="bar-fill" style="width:' + pct + '%;background:' + col + '"></div></div>';
   }
-  let html =
+  var html =
     row('Uptime', esc(fmtUptime(sys.uptime_sec))) +
     row('Load 1m', sys.load_1min != null ? Number(sys.load_1min).toFixed(2) : '—') +
-    row('RAM',     memPct + '%') + bar(memPct) +
-    row('Swap',    swapPct + '%') + bar(swapPct) +
-    row('Disk',    diskPct + '%') + bar(diskPct);
-  if (sys.cpu_temp != null)
-    html += row('CPU Temp', sys.cpu_temp + ' °C');
+    row('RAM',  memPct  + '%') + bar(memPct)  +
+    row('Swap', swapPct + '%') + bar(swapPct) +
+    row('Disk', diskPct + '%') + bar(diskPct);
+  if (sys.cpu_temp != null) html += row('CPU Temp', sys.cpu_temp + ' °C');
   el.innerHTML = html;
 }
 
 function updatePing(ping) {
-  const el = document.getElementById('ping-body');
+  var el = document.getElementById('ping-body');
   if (!ping || ping.length === 0) {
     el.innerHTML = '<div class="empty">No ping data yet.</div>';
     return;
   }
   el.innerHTML = ping.map(function(p) {
-    const loss = p.loss_pct != null ? p.loss_pct : '?';
-    const cls  = loss === 0 ? 'ping-loss-ok' : loss < 10 ? 'ping-loss-warn' : 'ping-loss-bad';
-    const rtt  = p.rtt_avg_ms != null ? Number(p.rtt_avg_ms).toFixed(1)+' ms' : '—';
+    var loss = p.loss_pct != null ? p.loss_pct : '?';
+    var cls  = loss === 0 ? 'ping-loss-ok' : loss < 10 ? 'ping-loss-warn' : 'ping-loss-bad';
+    var rtt  = p.rtt_avg_ms != null ? Number(p.rtt_avg_ms).toFixed(1) + ' ms' : '—';
     return '<div class="ping-row">' +
-      '<span class="ping-label">' + esc(p.label||p.target) + '</span>' +
-      '<span class="'+cls+'">'    + loss + '%</span>' +
-      '<span>'                    + rtt  + '</span>' +
+      '<span class="ping-label">' + esc(p.label || p.target) + '</span>' +
+      '<span class="' + cls + '">' + loss + '%</span>' +
+      '<span>' + rtt + '</span>' +
       '</div>';
   }).join('');
 }
 
 function updateTemp(temp) {
-  const el = document.getElementById('temp-body');
+  var el = document.getElementById('temp-body');
   if (!temp) { el.innerHTML = '<div class="empty">No temp data.</div>'; return; }
-  let html = '';
-  if (temp.xo_therm  != null) html += row('XO therm',  temp.xo_therm  + ' °C');
-  if (temp.mdm_case  != null) html += row('Modem case',temp.mdm_case  + ' °C');
-  if (temp.pa_therm  != null) html += row('PA therm',  temp.pa_therm  + ' °C');
+  var html = '';
+  if (temp.xo_therm != null) html += row('XO therm',   temp.xo_therm  + ' °C');
+  if (temp.mdm_case != null) html += row('Modem case', temp.mdm_case  + ' °C');
+  if (temp.pa_therm != null) html += row('PA therm',   temp.pa_therm  + ' °C');
   el.innerHTML = html || '<div class="empty">No readings.</div>';
 }
 
 function updateCollectors(cols) {
-  const el = document.getElementById('col-body');
+  var el = document.getElementById('col-body');
   if (!cols) { el.innerHTML = '<div class="empty">—</div>'; return; }
-  const names = ['lte','ping','system','vnstat'];
+  var names = ['lte', 'ping', 'system', 'vnstat'];
   el.innerHTML = names.map(function(n) {
-    const c = cols[n];
+    var c = cols[n];
     if (!c) return '';
-    const status  = c.status || 'never';
-    const ageStr  = fmtAge(c.last_run_ts);
-    const cls     = status === 'ok' ? 'col-ok' : status === 'error' ? 'col-error' : 'col-never';
+    var status = c.status || 'never';
+    var cls    = status === 'ok' ? 'col-ok' : status === 'error' ? 'col-error' : 'col-never';
     return '<div class="col-row">' +
       '<span class="col-name">' + n + '</span>' +
-      '<span style="color:var(--muted);font-size:11px">' + ageStr + '</span>' +
+      '<span style="color:var(--muted);font-size:11px">' + fmtAge(c.last_run_ts) + '</span>' +
       '<span class="' + cls + '">[' + status + ']</span>' +
       '</div>';
   }).join('');
 }
 
+// ---------------------------------------------------------------------------
+// updater — Signal tab
+// ---------------------------------------------------------------------------
 function updateNeighbours(neighbours) {
-  const el   = document.getElementById('neigh-body');
-  const sumEl = document.getElementById('neigh-summary');
+  var el    = document.getElementById('neigh-body');
+  var sumEl = document.getElementById('neigh-summary');
   if (!neighbours || neighbours.length === 0) {
-    el.innerHTML = '<div class="empty">No neighbour data (collector may not have received AT+QENG response yet).</div>';
+    el.innerHTML = '<div class="empty">No neighbour data (AT+QENG may not have responded yet).</div>';
     if (sumEl) sumEl.textContent = '';
     return;
   }
-
-  // build summary counts
   var counts = {};
   neighbours.forEach(function(n) { counts[n.type] = (counts[n.type] || 0) + 1; });
   var parts = [];
@@ -595,42 +701,68 @@ function updateNeighbours(neighbours) {
 
   var html = '<table class="neigh-table"><thead><tr>' +
     '<th>Type</th><th>RAT</th><th>EARFCN</th><th>PCI</th>' +
-    '<th>RSRP</th><th>RSRQ</th><th>SINR</th>' +
-    '</tr></thead><tbody>';
-
+    '<th>RSRP</th><th>RSRQ</th><th>SINR</th></tr></thead><tbody>';
   neighbours.forEach(function(n) {
     var t    = (n.type || 'unknown').toLowerCase();
     var tCls = t === 'intra' ? 'nt-intra' : t === 'inter' ? 'nt-inter'
              : t === 'wcdma' ? 'nt-wcdma' : 'nt-gsm';
-    var qr   = qRsrp(n.rsrp);
-    var qq   = qRsrq(n.rsrq);
     html += '<tr>' +
       '<td><span class="neigh-type ' + tCls + '">' + esc(n.type || '?') + '</span></td>' +
       '<td style="color:var(--muted)">' + esc(n.rat || '—') + '</td>' +
       '<td>' + (n.earfcn != null ? n.earfcn : '—') + '</td>' +
       '<td><strong>' + (n.pci != null ? n.pci : '—') + '</strong></td>' +
-      '<td class="q-' + qr + '">' + (n.rsrp != null ? n.rsrp + ' dBm' : '—') + '</td>' +
-      '<td class="q-' + qq + '">' + (n.rsrq != null ? n.rsrq + ' dB'  : '—') + '</td>' +
+      '<td class="q-' + qRsrp(n.rsrp) + '">' + (n.rsrp != null ? n.rsrp + ' dBm' : '—') + '</td>' +
+      '<td class="q-' + qRsrq(n.rsrq) + '">' + (n.rsrq != null ? n.rsrq + ' dB'  : '—') + '</td>' +
       '<td>' + (n.sinr != null ? n.sinr + ' dB' : '—') + '</td>' +
       '</tr>';
   });
-
   html += '</tbody></table>';
   el.innerHTML = html;
 }
 
+// ---------------------------------------------------------------------------
+// updater — Events tab
+// ---------------------------------------------------------------------------
+function updateEvents(events) {
+  var el    = document.getElementById('ev-body');
+  var cntEl = document.getElementById('ev-count');
+  if (!events || events.length === 0) {
+    el.innerHTML = '<div class="empty">(none)</div>';
+    if (cntEl) cntEl.textContent = '';
+    return;
+  }
+  if (cntEl) cntEl.textContent = events.length + ' events';
+  el.innerHTML = events.map(function(e) {
+    var sev = e.severity || 'info';
+    var sevCls = 'sev-' + sev;
+    var det = '';
+    if (e.details) {
+      try { det = JSON.stringify(JSON.parse(e.details)); } catch(_) { det = String(e.details); }
+    }
+    return '<div class="ev-row">' +
+      '<span class="ev-time">' + esc(fmtTs(e.ts)) + '</span>' +
+      '<span class="ev-sev-badge ' + sevCls + '">' + esc(sev) + '</span>' +
+      '<span class="ev-type ev-' + sev + '">' + esc(e.type || '?') + '</span>' +
+      (det ? '<span class="ev-det">' + esc(det) + '</span>' : '') +
+      '</div>';
+  }).join('');
+}
+
+// ---------------------------------------------------------------------------
+// updater — Config tab
+// ---------------------------------------------------------------------------
 function updateConfig(cfg) {
-  const el = document.getElementById('cfg-body');
+  var el = document.getElementById('cfg-body');
   if (!cfg || typeof cfg !== 'object') { el.innerHTML = '<div class="empty">—</div>'; return; }
-  const items = [
+  var items = [
     ['AT port',        cfg.at_port],
     ['WAN interface',  cfg.wan_iface],
     ['Log level',      cfg.log_level],
     ['Auto-switch',    cfg.auto_switch],
     ['SINR threshold', cfg.sinr_threshold != null ? cfg.sinr_threshold + ' dB' : null],
-    ['LTE interval',   cfg.lte_interval  != null ? cfg.lte_interval  + ' s' : null],
-    ['Sys interval',   cfg.sys_interval  != null ? cfg.sys_interval  + ' s' : null],
-    ['Ping interval',  cfg.ping_interval != null ? cfg.ping_interval + ' s' : null],
+    ['LTE interval',   cfg.lte_interval   != null ? cfg.lte_interval  + ' s'  : null],
+    ['Sys interval',   cfg.sys_interval   != null ? cfg.sys_interval  + ' s'  : null],
+    ['Ping interval',  cfg.ping_interval  != null ? cfg.ping_interval + ' s'  : null],
     ['Dashboard port', cfg.dash_port],
     ['Retention',      cfg.retention_days != null ? cfg.retention_days + ' days' : null],
   ];
@@ -640,177 +772,134 @@ function updateConfig(cfg) {
         '<span class="cfg-key">' + esc(i[0]) + '</span>' +
         '<span class="cfg-val">' + esc(i[1]) + '</span>' +
         '</div>';
-    }).join('') +
-    '</div>';
-}
-
-function updateEvents(events) {
-  const el = document.getElementById('ev-body');
-  if (!events || events.length === 0) {
-    el.innerHTML = '<div class="empty">(none)</div>';
-    return;
-  }
-  el.innerHTML = events.map(function(e) {
-    const dt  = e.ts ? new Date(e.ts*1000).toLocaleString() : '—';
-    const sev = e.severity || 'info';
-    let det = '';
-    if (e.details) {
-      try { det = JSON.stringify(JSON.parse(e.details)); } catch(_) { det = String(e.details); }
-    }
-    return '<div class="ev-row">' +
-      '<span class="ev-time">' + esc(dt) + '</span>' +
-      '<span class="ev-type ev-'+sev+'">' + esc(e.type||'?') + '</span>' +
-      (det ? '<span class="ev-det">' + esc(det) + '</span>' : '') +
-      '</div>';
-  }).join('');
+    }).join('') + '</div>';
 }
 
 // ---------------------------------------------------------------------------
 // chart
 // ---------------------------------------------------------------------------
 function drawChart(hd) {
-  const wrap = document.getElementById('chart-wrap');
+  var wrap = document.getElementById('chart-wrap');
   if (!hd || !hd.data || hd.data.length < 2) {
     wrap.innerHTML = '<div class="empty">Not enough data yet (' + (hd && hd.count || 0) + ' points).</div>';
     return;
   }
+  var data = hd.data;
+  var W = 900, H = 200;
+  var PL = 46, PR = 12, PT = 14, PB = 28;
+  var cw = W - PL - PR, ch = H - PT - PB;
 
-  const data = hd.data;
-  const W = 900, H = 190;
-  const PL = 46, PR = 12, PT = 14, PB = 28;
-  const cw = W - PL - PR;
-  const ch = H - PT - PB;
-
-  const vals = data.map(function(d){ return d.v; });
-  let mn = hd.min !== null ? +hd.min : Math.min.apply(null, vals);
-  let mx = hd.max !== null ? +hd.max : Math.max.apply(null, vals);
-  const spread = mx - mn || 2;
+  var vals = data.map(function(d){ return d.v; });
+  var mn = hd.min !== null ? +hd.min : Math.min.apply(null, vals);
+  var mx = hd.max !== null ? +hd.max : Math.max.apply(null, vals);
+  var spread = mx - mn || 2;
   mn = mn - spread * 0.08;
   mx = mx + spread * 0.08;
-  const yRng = mx - mn;
+  var yRng = mx - mn;
 
-  const t0 = data[0].ts;
-  const t1 = data[data.length - 1].ts;
-  const tRng = t1 - t0 || 1;
+  var t0 = data[0].ts, t1 = data[data.length - 1].ts;
+  var tRng = t1 - t0 || 1;
 
   function xp(ts) { return PL + (ts - t0) / tRng * cw; }
   function yp(v)  { return PT + ch - (v - mn) / yRng * ch; }
 
-  // line color from last value quality
-  const lastV = vals[vals.length - 1];
-  const color = chartMetric === 'rsrp' ? Q_COLOR[qRsrp(lastV)]
-              : chartMetric === 'sinr' ? Q_COLOR[qSinr(lastV)]
-              : chartMetric === 'rsrq' ? Q_COLOR[qRsrq(lastV)]
-              : '#3b82f6';
+  var lastV = vals[vals.length - 1];
+  var color = chartMetric === 'rsrp' ? Q_COLOR[qRsrp(lastV)]
+            : chartMetric === 'sinr' ? Q_COLOR[qSinr(lastV)]
+            : chartMetric === 'rsrq' ? Q_COLOR[qRsrq(lastV)]
+            : '#3b82f6';
 
-  // polyline
-  const pts = data.map(function(d){
+  var pts = data.map(function(d){
     return xp(d.ts).toFixed(1) + ',' + yp(d.v).toFixed(1);
   }).join(' ');
 
-  // Y grid + labels (5 lines)
-  let gridSvg = '', yLblSvg = '';
+  var gridSvg = '', yLblSvg = '';
   for (var i = 0; i <= 4; i++) {
     var yv = mn + (yRng / 4) * i;
     var yy = yp(yv).toFixed(1);
-    gridSvg  += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (W-PR) + '" y2="' + yy +
-                '" stroke="#334155" stroke-width="1"/>';
-    yLblSvg  += '<text x="' + (PL-4) + '" y="' + yy + '" text-anchor="end" dominant-baseline="middle"' +
-                ' fill="#94a3b8" font-size="10">' + Math.round(yv) + '</text>';
+    gridSvg += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (W-PR) + '" y2="' + yy + '" stroke="#334155" stroke-width="1"/>';
+    yLblSvg += '<text x="' + (PL-4) + '" y="' + yy + '" text-anchor="end" dominant-baseline="middle" fill="#94a3b8" font-size="10">' + Math.round(yv) + '</text>';
   }
 
-  // X axis labels
-  const intervalSec = chartHours <= 6 ? 3600 : chartHours <= 48 ? 14400 : 86400;
-  const nowEpoch  = Math.floor(Date.now() / 1000);
-  const sinceEpoch = hd.since || (nowEpoch - chartHours * 3600);
-  let xLblSvg = '';
+  var intervalSec = chartHours <= 6 ? 3600 : chartHours <= 48 ? 14400 : 86400;
+  var nowEpoch    = Math.floor(Date.now() / 1000);
+  var sinceEpoch  = hd.since || (nowEpoch - chartHours * 3600);
+  var xLblSvg = '';
   var lt = Math.ceil(sinceEpoch / intervalSec) * intervalSec;
   while (lt <= nowEpoch) {
     if (lt >= t0 && lt <= t1) {
       var xx = xp(lt).toFixed(1);
-      var d  = new Date(lt * 1000);
+      var dd = new Date(lt * 1000);
       var lbl = chartHours <= 48
-        ? pad2(d.getHours()) + ':' + pad2(d.getMinutes())
-        : (d.getMonth()+1) + '/' + d.getDate() + ' ' + pad2(d.getHours()) + 'h';
-      xLblSvg += '<line x1="' + xx + '" y1="' + PT + '" x2="' + xx + '" y2="' + (H-PB) +
-                 '" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="3,3"/>';
-      xLblSvg += '<text x="' + xx + '" y="' + (H-PB+14) + '" text-anchor="middle"' +
-                 ' fill="#94a3b8" font-size="10">' + lbl + '</text>';
+        ? pad2(dd.getHours()) + ':' + pad2(dd.getMinutes())
+        : (dd.getMonth()+1) + '/' + dd.getDate() + ' ' + pad2(dd.getHours()) + 'h';
+      xLblSvg += '<line x1="' + xx + '" y1="' + PT + '" x2="' + xx + '" y2="' + (H-PB) + '" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="3,3"/>';
+      xLblSvg += '<text x="' + xx + '" y="' + (H-PB+14) + '" text-anchor="middle" fill="#94a3b8" font-size="10">' + lbl + '</text>';
     }
     lt += intervalSec;
   }
 
-  const unit = chartMetric === 'sinr' || chartMetric === 'rsrq' ? 'dB' : 'dBm';
-
+  var unit = chartMetric === 'sinr' || chartMetric === 'rsrq' ? 'dB' : 'dBm';
   wrap.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
     gridSvg + xLblSvg + yLblSvg +
-    '<text x="' + PL + '" y="' + (PT-2) + '" fill="#64748b" font-size="9">' +
-      chartMetric.toUpperCase() + ' (' + unit + ')</text>' +
-    '<polyline points="' + pts + '" fill="none" stroke="' + color +
-      '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<text x="' + PL + '" y="' + (PT-2) + '" fill="#64748b" font-size="9">' + chartMetric.toUpperCase() + ' (' + unit + ')</text>' +
+    '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
     '</svg>';
+  chartLoaded = true;
 }
 
-function pad2(n) { return n < 10 ? '0' + n : String(n); }
-
 async function fetchChart() {
-  const url = HIST + '?metric=' + chartMetric + '&hours=' + chartHours + '&_=' + Date.now();
   try {
-    const r = await fetch(url);
+    var r = await fetch(HIST + '?metric=' + chartMetric + '&hours=' + chartHours + '&_=' + Date.now());
     if (!r.ok) return;
-    const hd = await r.json();
+    var hd = await r.json();
     drawChart(hd);
-    const info = document.getElementById('chart-info');
+    var info = document.getElementById('chart-info');
     if (info) info.textContent = hd.count ? hd.count + ' pts' : '';
   } catch(_) {}
 }
 
-// ---------------------------------------------------------------------------
 // chart controls
-// ---------------------------------------------------------------------------
 document.getElementById('metric-btns').addEventListener('click', function(e) {
-  const btn = e.target.closest('.chart-btn');
+  var btn = e.target.closest('.chart-btn');
   if (!btn || !btn.dataset.metric) return;
   chartMetric = btn.dataset.metric;
-  document.querySelectorAll('#metric-btns .chart-btn').forEach(function(b){
-    b.classList.toggle('active', b === btn);
-  });
+  chartLoaded = false;
+  document.querySelectorAll('#metric-btns .chart-btn').forEach(function(b){ b.classList.toggle('active', b === btn); });
   fetchChart();
 });
-
 document.getElementById('hours-btns').addEventListener('click', function(e) {
-  const btn = e.target.closest('.chart-btn');
+  var btn = e.target.closest('.chart-btn');
   if (!btn || !btn.dataset.hours) return;
   chartHours = +btn.dataset.hours;
-  document.querySelectorAll('#hours-btns .chart-btn').forEach(function(b){
-    b.classList.toggle('active', b === btn);
-  });
+  chartLoaded = false;
+  document.querySelectorAll('#hours-btns .chart-btn').forEach(function(b){ b.classList.toggle('active', b === btn); });
   fetchChart();
 });
 
 // ---------------------------------------------------------------------------
-// main fetch & render
+// main refresh
 // ---------------------------------------------------------------------------
 async function refresh() {
   try {
-    const r = await fetch(API + '?_=' + Date.now());
+    var r = await fetch(API + '?_=' + Date.now());
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
+    var d = await r.json();
 
-    const mb = document.getElementById('mode-badge');
-    const mode = d.mode || 'normal';
+    var mb   = document.getElementById('mode-badge');
+    var mode = d.mode || 'normal';
     mb.textContent = mode;
-    mb.className = 'mode-badge mode-' + (mode === 'debug' || mode === 'night' ? mode : 'normal');
+    mb.className   = 'mode-badge mode-' + (['debug','night'].indexOf(mode) >= 0 ? mode : 'normal');
 
     updateSignal(d.signal);
     updateCA(d.ca);
-    updateNeighbours(d.neighbours);
     updateSystem(d.system);
     updatePing(d.ping);
     updateTemp(d.temp);
     updateCollectors(d.collectors);
-    updateConfig(d.config);
+    updateNeighbours(d.neighbours);
     updateEvents(d.events);
+    updateConfig(d.config);
 
     document.getElementById('updated').textContent = new Date().toLocaleTimeString();
     document.getElementById('status-dot').className = 'dot online';
@@ -820,13 +909,13 @@ async function refresh() {
     console.error('API error:', e);
   }
 
-  fetchChart();
+  if (activeTab() === 'signal') fetchChart();
 }
 
 function tick() {
   countdown--;
   if (countdown <= 0) { countdown = REFRESH; refresh(); }
-  const el = document.getElementById('countdown');
+  var el = document.getElementById('countdown');
   if (el) el.textContent = countdown + 's';
 }
 

@@ -221,7 +221,7 @@ fi
 # ---------------------------------------------------------------------------
 _ev_json=$("$SQLITE" -separator '|' "$DB_PATH" \
     "SELECT ts, event_type, severity, details
-     FROM events ORDER BY ts DESC LIMIT 5;" 2>/dev/null | awk -F'|' '
+     FROM events ORDER BY ts DESC LIMIT 50;" 2>/dev/null | awk -F'|' '
 function s(v) { return (v=="" ? "null" : "\"" v "\"") }
 function n(v) { return (v=="" ? "null" : v) }
 BEGIN { printf "["; sep="" }
