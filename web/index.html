@@ -328,6 +328,58 @@ header {
 .cfg-key { color: var(--muted); font-size: 12px; }
 .cfg-val { font-weight: 600; font-size: 12px; word-break: break-all; text-align: right; }
 
+/* band control */
+.band-status {
+  font-size: 12px; color: var(--muted); margin-bottom: 10px;
+}
+.band-status strong { color: var(--text); }
+.band-status .locked-badge {
+  display: inline-block; background: rgba(245,158,11,.15);
+  color: #fbbf24; border: 1px solid rgba(245,158,11,.3);
+  border-radius: 4px; padding: 1px 6px; font-size: 11px; margin-left: 6px;
+}
+.band-grid {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+}
+.band-cb {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(30,41,59,.6); border: 1px solid var(--border);
+  border-radius: 5px; padding: 4px 9px; cursor: pointer;
+  font-size: 12px; transition: border-color .15s, background .15s;
+  user-select: none;
+}
+.band-cb:hover { border-color: var(--accent); }
+.band-cb input[type=checkbox] { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.band-cb.checked { background: rgba(59,130,246,.1); border-color: rgba(59,130,246,.4); }
+.band-cb .band-freq { color: var(--muted); font-size: 10px; }
+.band-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 4px;
+}
+.band-btn {
+  background: rgba(59,130,246,.15); color: #93c5fd;
+  border: 1px solid rgba(59,130,246,.35); border-radius: 5px;
+  padding: 5px 14px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.band-btn:hover { background: rgba(59,130,246,.25); border-color: var(--accent); }
+.band-btn.danger {
+  background: rgba(239,68,68,.1); color: #fca5a5;
+  border-color: rgba(239,68,68,.3);
+}
+.band-btn.danger:hover { background: rgba(239,68,68,.2); border-color: #ef4444; }
+.band-reboot-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--muted);
+}
+.band-reboot-row input { accent-color: var(--accent); cursor: pointer; }
+.band-msg {
+  margin-top: 8px; font-size: 12px; padding: 5px 10px;
+  border-radius: 5px; display: none;
+}
+.band-msg.ok   { background: rgba(34,197,94,.1); color: #86efac; border: 1px solid rgba(34,197,94,.2); }
+.band-msg.err  { background: rgba(239,68,68,.1); color: #fca5a5; border: 1px solid rgba(239,68,68,.2); }
+.band-msg.busy { background: rgba(59,130,246,.1); color: #93c5fd; border: 1px solid rgba(59,130,246,.2); }
+
 .empty { color: var(--muted); font-style: italic; padding: 4px 0; }
 </style>
 </head>
@@ -454,6 +506,25 @@ header {
       <div class="card-title"><span class="card-title-text">Configuration</span></div>
       <div id="cfg-body"><div class="empty">—</div></div>
     </div>
+    <div class="card wide">
+      <div class="card-title"><span class="card-title-text">Band Control</span></div>
+      <div id="band-body">
+        <div class="band-status" id="band-status-line">
+          <span id="band-no-state">No band state cached — click <strong>Refresh</strong> to query modem.</span>
+        </div>
+        <div class="band-grid" id="band-grid"></div>
+        <div class="band-actions">
+          <button class="band-btn" id="band-lock-btn" onclick="bandLock()">Lock to selected</button>
+          <button class="band-btn danger" id="band-unlock-btn" onclick="bandUnlock()">Unlock (all bands)</button>
+          <button class="band-btn" id="band-refresh-btn" onclick="bandRefresh()">Refresh</button>
+          <div class="band-reboot-row">
+            <input type="checkbox" id="band-reboot-cb">
+            <label for="band-reboot-cb">Take effect after modem reboot only</label>
+          </div>
+        </div>
+        <div class="band-msg" id="band-msg"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -463,6 +534,16 @@ header {
 const REFRESH = 30;
 const API     = 'cgi-bin/api.cgi';
 const HIST    = 'cgi-bin/history.cgi';
+const CMD     = 'cgi-bin/cmd.cgi';
+
+// LTE bands shown in Band Control UI (common European bands)
+const BAND_LIST = [
+  {n:'B1',  freq:'2100', d:'FDD'}, {n:'B3',  freq:'1800', d:'FDD'},
+  {n:'B7',  freq:'2600', d:'FDD'}, {n:'B8',  freq:'900',  d:'FDD'},
+  {n:'B20', freq:'800',  d:'FDD'}, {n:'B28', freq:'700',  d:'FDD'},
+  {n:'B38', freq:'2600', d:'TDD'}, {n:'B40', freq:'2300', d:'TDD'},
+  {n:'B41', freq:'2500', d:'TDD'},
+];
 let countdown = REFRESH;
 let ticker    = null;
 let chartMetric = 'rsrp';
@@ -749,6 +830,94 @@ function updateEvents(events) {
 }
 
 // ---------------------------------------------------------------------------
+// updater — Band Control
+// ---------------------------------------------------------------------------
+function updateBands(bands) {
+  var statusLine = document.getElementById('band-status-line');
+  var grid       = document.getElementById('band-grid');
+  var noState    = document.getElementById('band-no-state');
+
+  if (!bands || typeof bands !== 'object') {
+    if (noState) noState.style.display = '';
+    grid.innerHTML = '';
+    return;
+  }
+  if (noState) noState.style.display = 'none';
+
+  var active = bands.active || [];
+  var locked = bands.locked || false;
+
+  statusLine.innerHTML =
+    '<strong>LTE mask:</strong> ' + esc(bands.lte_mask || '—') +
+    (locked
+      ? ' <span class="locked-badge">LOCKED</span>'
+      : ' <span style="color:var(--muted);font-size:11px">(all bands)</span>') +
+    '<br><strong>Active bands:</strong> ' + esc(active.join(', ') || '—') +
+    (bands.original_mask ? ' <span style="color:var(--muted);font-size:10px">| original: ' + esc(bands.original_mask) + '</span>' : '');
+
+  grid.innerHTML = BAND_LIST.map(function(b) {
+    var checked = active.indexOf(b.n) >= 0;
+    return '<label class="band-cb' + (checked ? ' checked' : '') + '" id="bandlbl-' + b.n + '">' +
+      '<input type="checkbox" id="bandcb-' + b.n + '"' + (checked ? ' checked' : '') +
+      ' onchange="bandCbChange(this)">' +
+      '<span>' + esc(b.n) + '</span>' +
+      '<span class="band-freq">' + esc(b.freq) + ' ' + esc(b.d) + '</span>' +
+      '</label>';
+  }).join('');
+}
+
+function bandCbChange(cb) {
+  var lbl = document.getElementById('bandlbl-' + cb.id.replace('bandcb-', ''));
+  if (lbl) lbl.className = 'band-cb' + (cb.checked ? ' checked' : '');
+}
+
+function _bandMsg(type, text) {
+  var el = document.getElementById('band-msg');
+  el.className = 'band-msg ' + type;
+  el.textContent = text;
+  el.style.display = 'block';
+  if (type === 'ok') setTimeout(function(){ el.style.display = 'none'; }, 5000);
+}
+
+function _bandCmd(params, onDone) {
+  _bandMsg('busy', 'Sending command…');
+  var url = CMD + '?' + params;
+  fetch(url).then(function(r){ return r.json(); }).then(function(j) {
+    if (j.ok) {
+      _bandMsg('ok', j.message || 'Done');
+      if (onDone) onDone();
+    } else {
+      _bandMsg('err', 'Error: ' + (j.error || 'unknown'));
+    }
+  }).catch(function(e) {
+    _bandMsg('err', 'Request failed: ' + e);
+  });
+}
+
+function bandRefresh() {
+  _bandCmd('action=band_refresh', function(){ fetchData(); });
+}
+
+function bandLock() {
+  var sel = [];
+  BAND_LIST.forEach(function(b) {
+    var cb = document.getElementById('bandcb-' + b.n);
+    if (cb && cb.checked) sel.push(b.n);
+  });
+  if (sel.length === 0) { _bandMsg('err', 'Select at least one band.'); return; }
+  var reboot = document.getElementById('band-reboot-cb').checked ? 1 : 0;
+  if (!reboot && !confirm('Locking bands will cause a brief LTE reconnect (~10-30s). Continue?')) return;
+  _bandCmd('action=band_lock&bands=' + encodeURIComponent(sel.join(',')) + '&reboot=' + reboot,
+    function(){ setTimeout(fetchData, 2000); });
+}
+
+function bandUnlock() {
+  var reboot = document.getElementById('band-reboot-cb').checked ? 1 : 0;
+  if (!reboot && !confirm('Restoring all bands will cause a brief LTE reconnect. Continue?')) return;
+  _bandCmd('action=band_unlock&reboot=' + reboot, function(){ setTimeout(fetchData, 2000); });
+}
+
+// ---------------------------------------------------------------------------
 // updater — Config tab
 // ---------------------------------------------------------------------------
 function updateConfig(cfg) {
@@ -900,6 +1069,7 @@ async function refresh() {
     updateNeighbours(d.neighbours);
     updateEvents(d.events);
     updateConfig(d.config);
+    updateBands(d.bands);
 
     document.getElementById('updated').textContent = new Date().toLocaleTimeString();
     document.getElementById('status-dot').className = 'dot online';

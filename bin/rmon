@@ -28,7 +28,7 @@
 
 set -u
 
-VERSION="0.4.11"
+VERSION="0.5.0"
 INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
 DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
 CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"
@@ -53,7 +53,10 @@ Commands:
                                metrics: rsrp | sinr | rsrq | rssi
   diag                         Modem info, signal, config, recent errors
   mode [name]                  Get or set sampling mode (normal|debug|night)
-  web [start|stop|status]      HTTP dashboard — start/stop BusyBox httpd on LAN
+  band [show]                  Show active LTE bands (live AT query)
+  band lock <bands> [--reboot] Restrict modem to specific bands (e.g. B1,B3,B20)
+  band unlock [--reboot]       Restore original full-band mask
+  web [start|stop|status]      HTTP dashboard — start/stop lighttpd on LAN
   export [--last <dur>]        Export CSV to stdout (--last 24h or --last 7d)
   events [N]                   Last N events (default: 20)
   db info                      Row counts, time range, file size
@@ -71,6 +74,10 @@ Examples:
   rmon plot sinr 60
   rmon diag
   rmon mode debug
+  rmon band
+  rmon band lock B1,B3,B20
+  rmon band lock B1,B3 --reboot
+  rmon band unlock
   rmon web start
   rmon web stop
   rmon export --last 24h > dump.csv
@@ -705,6 +712,196 @@ _web_lan_ip() {
     echo "${_ip:-192.168.50.1}"
 }
 
+# ---------------------------------------------------------------------------
+# band — LTE band locking via AT+QCFG="band"
+# ---------------------------------------------------------------------------
+
+# _bit_set <hex_mask_string> <bit_position_0based>
+# Returns 1 if bit is set, 0 otherwise.
+# Uses string nibble extraction to avoid double-precision loss on large masks
+# (e.g. 0x2000001e0bb1f39df > 2^53 overflows awk float).
+_bit_set() {
+    _ms=$(echo "$1" | sed 's/^0[xX]//' | tr 'A-F' 'a-f')
+    _bp="$2"
+    _ni=$(( _bp / 4 ))
+    _bin=$(( _bp % 4 ))
+    _ml=${#_ms}
+    _ci=$(( _ml - 1 - _ni ))
+    [ "$_ci" -lt 0 ] && echo 0 && return
+    _c=$(echo "$_ms" | cut -c$(( _ci + 1 )))
+    case "$_c" in
+        0) _nv=0 ;; 1) _nv=1 ;; 2) _nv=2 ;; 3) _nv=3 ;;
+        4) _nv=4 ;; 5) _nv=5 ;; 6) _nv=6 ;; 7) _nv=7 ;;
+        8) _nv=8 ;; 9) _nv=9 ;; a) _nv=10 ;; b) _nv=11 ;;
+        c) _nv=12 ;; d) _nv=13 ;; e) _nv=14 ;; f) _nv=15 ;;
+        *) _nv=0 ;;
+    esac
+    echo $(( ( _nv >> _bin ) & 1 ))
+}
+
+# Decode known band numbers set in a hex LTE mask → "B1,B3,B20" string
+_decode_bands() {
+    _dm="$1"
+    _dout=""
+    for _bn in 1 2 3 4 5 7 8 12 13 17 18 19 20 26 28 38 39 40 41; do
+        if [ "$(_bit_set "$_dm" $(( _bn - 1 )))" = "1" ]; then
+            _dout="${_dout:+$_dout,}B${_bn}"
+        fi
+    done
+    echo "${_dout:-none}"
+}
+
+# Convert band list like "B1,B3,B20" → hex bitmask using awk lshift/or
+# Band N → bit N-1; all values ≤ B41=bit40 < 2^53, safe for awk double.
+_bands_to_mask() {
+    echo "$1" | tr ',' '\n' | sed 's/[Bb]//' | \
+    awk 'BEGIN { mask = 0 }
+    /^[0-9]+$/ {
+        b = $1 + 0
+        if (b >= 1 && b <= 64) mask = or(mask, lshift(1, b - 1))
+    }
+    END { printf "0x%x\n", mask }'
+}
+
+_band_state_file() { echo "$INSTALL_BASE/state/band_config"; }
+
+_band_read_state() {
+    _sf=$(_band_state_file)
+    _bs_mask="" ; _bs_active="" ; _bs_locked="no" ; _bs_orig=""
+    [ -f "$_sf" ] || return
+    _bs_mask=$(grep   '^lte_mask='      "$_sf" 2>/dev/null | cut -d= -f2-)
+    _bs_active=$(grep '^active_bands='  "$_sf" 2>/dev/null | cut -d= -f2-)
+    _bs_locked=$(grep '^locked='        "$_sf" 2>/dev/null | cut -d= -f2-)
+    _bs_orig=$(grep   '^original_mask=' "$_sf" 2>/dev/null | cut -d= -f2-)
+}
+
+_band_write_state() {
+    _sf=$(_band_state_file)
+    _sdir=$(dirname "$_sf")
+    [ -d "$_sdir" ] || mkdir -p "$_sdir"
+    printf 'lte_mask=%s\nactive_bands=%s\nlocked=%s\noriginal_mask=%s\n' \
+        "$1" "$2" "$3" "$4" > "$_sf"
+}
+
+cmd_band_show() {
+    _at="${AT_SEND:-$INSTALL_BASE/bin/at-send}"
+    [ -x "$_at" ] || { echo "ERROR: at-send not found at $_at" >&2; exit 1; }
+
+    printf "Querying modem band config...\n"
+    _resp=$("$_at" 'AT+QCFG="band"' 2>/dev/null)
+    _line=$(echo "$_resp" | grep '+QCFG:')
+    [ -z "$_line" ] && { echo "ERROR: No response from modem" >&2; exit 1; }
+
+    # +QCFG: "band",<gsm_wcdma_mask>,<lte_mask>,<nr5g_mask>
+    _lte=$(echo "$_line" | cut -d',' -f3 | sed 's/[[:space:]]//g')
+    _active=$(_decode_bands "$_lte")
+
+    _band_read_state
+    _locked_str="${_bs_locked:-no}"
+    if [ "$_locked_str" = "yes" ]; then
+        _lock_label="LOCKED by rmon band lock"
+    else
+        _lock_label="unlocked (all bands)"
+    fi
+
+    printf "\nLTE mask : %s\n" "$_lte"
+    printf "Status   : %s\n" "$_lock_label"
+    printf "Active   : %s\n" "$_active"
+
+    _band_write_state "$_lte" "$_active" "$_locked_str" "${_bs_orig:-}"
+}
+
+cmd_band_lock() {
+    _bands_arg="${1:-}"
+    shift 2>/dev/null || true
+    _effect=0
+    [ "${1:-}" = "--reboot" ] && _effect=1
+
+    [ -z "$_bands_arg" ] && {
+        printf "Usage: rmon band lock <bands> [--reboot]\n  Example: rmon band lock B1,B3,B20\n" >&2
+        exit 1
+    }
+
+    _at="${AT_SEND:-$INSTALL_BASE/bin/at-send}"
+    [ -x "$_at" ] || { echo "ERROR: at-send not found at $_at" >&2; exit 1; }
+
+    _new_mask=$(_bands_to_mask "$_bands_arg")
+    if [ -z "$_new_mask" ] || [ "$_new_mask" = "0x0" ]; then
+        echo "ERROR: No valid bands in: $_bands_arg" >&2; exit 1
+    fi
+
+    # Save original mask before first lock
+    _band_read_state
+    _orig="${_bs_orig:-}"
+    if [ "${_bs_locked:-no}" != "yes" ] || [ -z "$_orig" ]; then
+        _r0=$("$_at" 'AT+QCFG="band"' 2>/dev/null)
+        _orig=$(echo "$_r0" | grep '+QCFG:' | cut -d',' -f3 | sed 's/[[:space:]]//g')
+    fi
+
+    # Interactive confirmation only when running in a terminal
+    if [ "$_effect" = "0" ] && [ -t 0 ]; then
+        printf "WARNING: Immediate band change causes ~10-30s LTE reconnect.\n"
+        printf "Restricting to: %s  (mask: %s)\n" "$_bands_arg" "$_new_mask"
+        printf "Continue? [y/N] "
+        read -r _ans
+        case "$_ans" in y|Y|yes|YES) ;; *) echo "Aborted."; exit 0 ;; esac
+    fi
+
+    _resp=$("$_at" "AT+QCFG=\"band\",0,$_new_mask,0,$_effect" 2>/dev/null)
+    if echo "$_resp" | grep -q '^OK'; then
+        _active=$(_decode_bands "$_new_mask")
+        _band_write_state "$_new_mask" "$_active" "yes" "$_orig"
+        printf "Band lock applied: %s\n" "$_bands_arg"
+        [ "$_effect" = "1" ] && printf "(Takes effect after modem reboot)\n"
+    else
+        printf "ERROR: AT command failed.\n%s\n" "$_resp" >&2; exit 1
+    fi
+}
+
+cmd_band_unlock() {
+    _effect=0
+    [ "${1:-}" = "--reboot" ] && _effect=1
+
+    _at="${AT_SEND:-$INSTALL_BASE/bin/at-send}"
+    [ -x "$_at" ] || { echo "ERROR: at-send not found at $_at" >&2; exit 1; }
+
+    _band_read_state
+    _orig="${_bs_orig:-}"
+    [ -z "$_orig" ] && {
+        echo "ERROR: No original mask saved. Run 'rmon band' first to cache current config." >&2
+        exit 1
+    }
+
+    if [ "$_effect" = "0" ] && [ -t 0 ]; then
+        printf "Restoring original mask: %s\n" "$_orig"
+        printf "This will cause ~10-30s LTE reconnect. Continue? [y/N] "
+        read -r _ans
+        case "$_ans" in y|Y|yes|YES) ;; *) echo "Aborted."; exit 0 ;; esac
+    fi
+
+    _resp=$("$_at" "AT+QCFG=\"band\",0,$_orig,0,$_effect" 2>/dev/null)
+    if echo "$_resp" | grep -q '^OK'; then
+        _active=$(_decode_bands "$_orig")
+        _band_write_state "$_orig" "$_active" "no" ""
+        printf "Bands unlocked — original mask restored: %s\n" "$_orig"
+        [ "$_effect" = "1" ] && printf "(Takes effect after modem reboot)\n"
+    else
+        printf "ERROR: AT command failed.\n%s\n" "$_resp" >&2; exit 1
+    fi
+}
+
+cmd_band() {
+    _sub="${1:-show}"
+    shift 2>/dev/null || true
+    case "$_sub" in
+        show|"") cmd_band_show ;;
+        lock)    cmd_band_lock "$@" ;;
+        unlock)  cmd_band_unlock "$@" ;;
+        *) printf "Usage: rmon band [show | lock <bands> [--reboot] | unlock [--reboot]]\n" >&2
+           exit 1 ;;
+    esac
+}
+
 cmd_web_start() {
     _port=$(_web_port)
 
@@ -839,6 +1036,7 @@ case "${1:-help}" in
     plot)                shift; cmd_plot "$@" ;;
     diag)                shift; cmd_diag "$@" ;;
     mode)                shift; cmd_mode "$@" ;;
+    band)                shift; cmd_band "$@" ;;
     web)                 shift; cmd_web "$@" ;;
     db)                  shift; cmd_db "$@" ;;
     export)              shift; cmd_export "$@" ;;

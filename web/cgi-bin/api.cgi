@@ -217,6 +217,23 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# bands — from state file written by rmon band / cmd.cgi (no live AT call)
+# ---------------------------------------------------------------------------
+_bands_json="null"
+_band_state="${INSTALL_BASE}/state/band_config"
+if [ -f "$_band_state" ]; then
+    _bm=$(grep '^lte_mask='      "$_band_state" 2>/dev/null | cut -d= -f2-)
+    _ba=$(grep '^active_bands='  "$_band_state" 2>/dev/null | cut -d= -f2-)
+    _bl=$(grep '^locked='        "$_band_state" 2>/dev/null | cut -d= -f2-)
+    _bo=$(grep '^original_mask=' "$_band_state" 2>/dev/null | cut -d= -f2-)
+    _locked_bool="false"
+    [ "$_bl" = "yes" ] && _locked_bool="true"
+    _ba_arr=$(echo "${_ba:-}" | awk 'BEGIN{RS=",";ORS=""} NF>0{printf sep"\""$1"\"";sep=","} BEGIN{print "["} END{print "]"}')
+    _bands_json=$(printf '{"lte_mask":"%s","active":%s,"locked":%s,"original_mask":"%s"}' \
+        "${_bm:-}" "${_ba_arr:-[]}" "$_locked_bool" "${_bo:-}")
+fi
+
+# ---------------------------------------------------------------------------
 # events — last 5
 # ---------------------------------------------------------------------------
 _ev_json=$("$SQLITE" -separator '|' "$DB_PATH" \
@@ -247,5 +264,6 @@ printf '"ping":%s,' "$_ping_json"
 printf '"temp":%s,' "$_temp_json"
 printf '"collectors":%s,' "$_col_json"
 printf '"config":%s,' "$_cfg_json"
+printf '"bands":%s,' "$_bands_json"
 printf '"events":%s' "$_ev_json"
 printf '}\n'
