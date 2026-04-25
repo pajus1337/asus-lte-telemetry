@@ -214,7 +214,7 @@ fi
 # =============================================================================
 step "Step 2/7: Install Entware packages"
 
-REQUIRED_PKGS="sqlite3-cli vnstat coreutils-sleep coreutils-mktemp coreutils-date coreutils-stat coreutils-timeout psmisc lsof"
+REQUIRED_PKGS="sqlite3-cli coreutils-sleep coreutils-mktemp coreutils-date coreutils-stat coreutils-timeout psmisc lsof"
 
 # Packages may be listed as installed but binary missing (e.g. after USB remount).
 # Check both the package list AND the actual binary for critical packages.
@@ -266,6 +266,33 @@ else
             || warn "Install failed; try manually: opkg install lighttpd lighttpd-mod-cgi"
     else
         info "Skipped. Install later with: opkg install lighttpd lighttpd-mod-cgi"
+    fi
+fi
+
+# Optional: vnstat for WAN traffic stats (day/month totals on wwan0)
+# Read wan_interface from existing config if present, otherwise default wwan0
+_wan_iface=$(grep -E '^[[:space:]]*wan_interface[[:space:]]*=' \
+    "$INSTALL_BASE/config/config.ini" "$INSTALL_BASE/config/config.ini.example" 2>/dev/null \
+    | head -1 | sed 's/.*=[[:space:]]*//' | sed 's/[[:space:]]*$//')
+_wan_iface="${_wan_iface:-wwan0}"
+
+if [ -x /opt/bin/vnstat ] || command -v vnstat >/dev/null 2>&1; then
+    ok "vnstat available — initialising interface ${_wan_iface} if needed"
+    /opt/bin/vnstat --create -i "$_wan_iface" >/dev/null 2>&1 || true
+else
+    info "vnstat provides daily/monthly WAN transfer stats on ${_wan_iface}."
+    if ask_yn "Install vnstat?" default_y; then
+        /opt/bin/opkg install vnstat \
+            && ok "vnstat installed" \
+            || warn "Install failed; try manually: opkg install vnstat"
+        # Initialise the interface database
+        if [ -x /opt/bin/vnstat ]; then
+            /opt/bin/vnstat --create -i "$_wan_iface" >/dev/null 2>&1 \
+                && ok "vnstat initialised for ${_wan_iface}" \
+                || warn "vnstat --create failed; run manually: vnstat --create -i ${_wan_iface}"
+        fi
+    else
+        info "Skipped. Install later: opkg install vnstat && vnstat --create -i ${_wan_iface}"
     fi
 fi
 

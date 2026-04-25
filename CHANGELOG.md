@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.11] - 2026-04-25
+
+### Fixed
+
+- **`bin/collector-vnstat.sh`** — used `command -v vnstat` which fails in nohup/init
+  contexts where `/opt/bin/` is absent from `$PATH`. Now checks `[ -x /opt/bin/vnstat ]`
+  first (same fix applied to `check_dependency` in v0.4.9), then falls back to
+  `command -v`. vnstat binary invoked via the resolved full path.
+- **`install.sh`** — vnstat moved from required packages to an optional prompt (like
+  lighttpd). The install step now also runs `vnstat --create -i <wan_iface>` to
+  initialise the interface database — without this step `vnstat --oneline` returns
+  no data and the collector reports `[error]`. If vnstat is already installed on
+  re-install, the `--create` step is re-run silently (idempotent).
+
 ## [0.4.10] - 2026-04-25
 
 ### Fixed

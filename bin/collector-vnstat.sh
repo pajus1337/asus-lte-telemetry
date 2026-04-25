@@ -22,7 +22,15 @@ COMPONENT="vnstat"
 collect_vnstat() {
     log_info "$COMPONENT" "Starting vnstat collection"
 
-    if ! command -v vnstat >/dev/null 2>&1; then
+    # Entware installs vnstat to /opt/bin/ which may not be in PATH in nohup/init context
+    _vnstat_bin=""
+    if [ -x /opt/bin/vnstat ]; then
+        _vnstat_bin=/opt/bin/vnstat
+    elif command -v vnstat >/dev/null 2>&1; then
+        _vnstat_bin=$(command -v vnstat)
+    fi
+
+    if [ -z "$_vnstat_bin" ]; then
         log_warning "$COMPONENT" "vnstat not installed, skipping"
         db_update_collector_state "$COMPONENT" "skipped" "vnstat not installed"
         return 0
@@ -33,7 +41,7 @@ collect_vnstat() {
 
     # Try --oneline first (most reliable across vnstat versions)
     # Format: id;nickname;day_rx;day_tx;month_rx;month_tx;total_rx;total_tx;...
-    _oneline=$(vnstat -i "$_iface" --oneline 2>/dev/null)
+    _oneline=$("$_vnstat_bin" -i "$_iface" --oneline 2>/dev/null)
 
     if [ -n "$_oneline" ]; then
         _day_rx=$(echo "$_oneline" | cut -d';' -f4)
