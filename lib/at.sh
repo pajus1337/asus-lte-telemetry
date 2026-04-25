@@ -42,8 +42,10 @@ at_cmd() {
         return 1
     fi
 
-    # Check for ERROR in response
-    if echo "$_response" | grep -q "^ERROR"; then
+    # A command truly failed only if the response has ERROR with no OK.
+    # If OK is present, the command succeeded — any ERROR after it is from
+    # the router OS's own AT commands captured in the same serial read window.
+    if echo "$_response" | grep -q "^ERROR" && ! echo "$_response" | grep -q "^OK"; then
         log_warning "at" "AT ERROR for: ${_cmd}"
         return 1
     fi

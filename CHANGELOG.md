@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.10] - 2026-04-25
+
+### Fixed
+
+- **`lib/at.sh` `at_cmd`** — changed error detection from "response contains `^ERROR`"
+  to "response contains `^ERROR` AND does NOT contain `^OK`". The previous check caused
+  false failures when the router OS sent its own AT command to the shared ttyUSB3 port
+  during our read window, and that command returned ERROR after our OK. A successful AT
+  command always ends with OK; an ERROR appearing after OK is from another process.
+
 ## [0.4.9] - 2026-04-25
 
 ### Fixed
