@@ -98,7 +98,11 @@ header {
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
+.card-title-text { flex: 1; }
 .row {
   display: flex;
   justify-content: space-between;
@@ -127,12 +131,6 @@ header {
 .b-fair      { background: rgba(245,158,11,.15); color: var(--amber); }
 .b-poor      { background: rgba(249,115,22,.15); color: var(--orange); }
 .b-vp        { background: rgba(239,68,68,.15);  color: var(--red); }
-.sparkline-wrap {
-  margin-top: 12px;
-  height: 44px;
-  opacity: .75;
-}
-.sparkline-wrap svg { display: block; }
 .bar-wrap {
   height: 5px;
   background: var(--border);
@@ -186,6 +184,53 @@ header {
 .col-error   { color: var(--red); }
 .col-never   { color: var(--border); }
 .empty { color: var(--muted); font-style: italic; padding: 4px 0; }
+/* chart */
+.chart-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.chart-btn-group {
+  display: flex;
+  gap: 4px;
+}
+.chart-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.chart-btn:hover { border-color: var(--accent); color: var(--text); }
+.chart-btn.active { background: rgba(59,130,246,.2); border-color: var(--accent); color: #93c5fd; }
+.chart-wrap {
+  margin-top: 10px;
+  width: 100%;
+}
+.chart-wrap svg { display: block; width: 100%; height: 190px; }
+/* config */
+.cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0;
+}
+.cfg-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(51,65,85,.5);
+  gap: 8px;
+}
+.cfg-item:last-child { border-bottom: none; }
+.cfg-key { color: var(--muted); font-size: 12px; }
+.cfg-val { font-weight: 600; font-size: 12px; word-break: break-all; text-align: right; }
 </style>
 </head>
 <body>
@@ -204,45 +249,74 @@ header {
 
   <!-- Signal -->
   <div class="card">
-    <div class="card-title">Signal</div>
+    <div class="card-title"><span class="card-title-text">Signal</span></div>
     <div id="sig-body"><div class="empty">No LTE data yet.</div></div>
-    <div class="sparkline-wrap" id="sparkline-wrap" style="display:none">
-      <div id="sparkline"></div>
-    </div>
   </div>
 
   <!-- CA -->
   <div class="card">
-    <div class="card-title">Carrier Aggregation</div>
+    <div class="card-title"><span class="card-title-text">Carrier Aggregation</span></div>
     <div id="ca-body"><div class="empty">No CA data.</div></div>
+  </div>
+
+  <!-- History Chart -->
+  <div class="card wide">
+    <div class="card-title">
+      <span class="card-title-text">Signal History</span>
+      <div class="chart-controls">
+        <div class="chart-btn-group" id="metric-btns">
+          <button class="chart-btn active" data-metric="rsrp">RSRP</button>
+          <button class="chart-btn" data-metric="sinr">SINR</button>
+          <button class="chart-btn" data-metric="rsrq">RSRQ</button>
+          <button class="chart-btn" data-metric="rssi">RSSI</button>
+        </div>
+        <div class="chart-btn-group" id="hours-btns">
+          <button class="chart-btn" data-hours="6">6h</button>
+          <button class="chart-btn active" data-hours="24">24h</button>
+          <button class="chart-btn" data-hours="72">3d</button>
+          <button class="chart-btn" data-hours="168">7d</button>
+        </div>
+        <span id="chart-info" style="color:var(--muted);font-size:11px"></span>
+      </div>
+    </div>
+    <div class="chart-wrap" id="chart-wrap">
+      <div class="empty">Loading chart…</div>
+    </div>
   </div>
 
   <!-- System -->
   <div class="card">
-    <div class="card-title">System</div>
+    <div class="card-title"><span class="card-title-text">System</span></div>
     <div id="sys-body"><div class="empty">No system data yet.</div></div>
   </div>
 
   <!-- Ping -->
   <div class="card">
-    <div class="card-title">Ping</div>
+    <div class="card-title"><span class="card-title-text">Ping</span></div>
     <div id="ping-body"><div class="empty">No ping data yet.</div></div>
   </div>
 
-  <!-- Collectors + Events row -->
+  <!-- Collectors -->
   <div class="card">
-    <div class="card-title">Collectors</div>
+    <div class="card-title"><span class="card-title-text">Collectors</span></div>
     <div id="col-body"><div class="empty">—</div></div>
   </div>
 
+  <!-- Temp -->
   <div class="card">
-    <div class="card-title">Temp</div>
+    <div class="card-title"><span class="card-title-text">Temp</span></div>
     <div id="temp-body"><div class="empty">No temp data.</div></div>
   </div>
 
-  <!-- Events full-width -->
+  <!-- Config -->
   <div class="card wide">
-    <div class="card-title">Recent Events</div>
+    <div class="card-title"><span class="card-title-text">Configuration</span></div>
+    <div id="cfg-body"><div class="empty">—</div></div>
+  </div>
+
+  <!-- Events -->
+  <div class="card wide">
+    <div class="card-title"><span class="card-title-text">Recent Events</span></div>
     <div id="ev-body"><div class="empty">(none)</div></div>
   </div>
 
@@ -256,6 +330,9 @@ const API      = 'cgi-bin/api.cgi';
 const HIST     = 'cgi-bin/history.cgi';
 let countdown  = REFRESH;
 let ticker     = null;
+
+let chartMetric = 'rsrp';
+let chartHours  = 24;
 
 // ---------------------------------------------------------------------------
 // signal quality helpers
@@ -409,6 +486,31 @@ function updateCollectors(cols) {
   }).join('');
 }
 
+function updateConfig(cfg) {
+  const el = document.getElementById('cfg-body');
+  if (!cfg || typeof cfg !== 'object') { el.innerHTML = '<div class="empty">—</div>'; return; }
+  const items = [
+    ['AT port',        cfg.at_port],
+    ['WAN interface',  cfg.wan_iface],
+    ['Log level',      cfg.log_level],
+    ['Auto-switch',    cfg.auto_switch],
+    ['SINR threshold', cfg.sinr_threshold != null ? cfg.sinr_threshold + ' dB' : null],
+    ['LTE interval',   cfg.lte_interval  != null ? cfg.lte_interval  + ' s' : null],
+    ['Sys interval',   cfg.sys_interval  != null ? cfg.sys_interval  + ' s' : null],
+    ['Ping interval',  cfg.ping_interval != null ? cfg.ping_interval + ' s' : null],
+    ['Dashboard port', cfg.dash_port],
+    ['Retention',      cfg.retention_days != null ? cfg.retention_days + ' days' : null],
+  ];
+  el.innerHTML = '<div class="cfg-grid">' +
+    items.filter(function(i){ return i[1] != null && i[1] !== ''; }).map(function(i) {
+      return '<div class="cfg-item">' +
+        '<span class="cfg-key">' + esc(i[0]) + '</span>' +
+        '<span class="cfg-val">' + esc(i[1]) + '</span>' +
+        '</div>';
+    }).join('') +
+    '</div>';
+}
+
 function updateEvents(events) {
   const el = document.getElementById('ev-body');
   if (!events || events.length === 0) {
@@ -431,29 +533,126 @@ function updateEvents(events) {
 }
 
 // ---------------------------------------------------------------------------
-// sparkline
+// chart
 // ---------------------------------------------------------------------------
-function drawSparkline(data) {
-  const wrap = document.getElementById('sparkline-wrap');
-  const el   = document.getElementById('sparkline');
-  if (!data || data.length < 2) { wrap.style.display='none'; return; }
-  wrap.style.display = '';
-  const W=300, H=44;
+function drawChart(hd) {
+  const wrap = document.getElementById('chart-wrap');
+  if (!hd || !hd.data || hd.data.length < 2) {
+    wrap.innerHTML = '<div class="empty">Not enough data yet (' + (hd && hd.count || 0) + ' points).</div>';
+    return;
+  }
+
+  const data = hd.data;
+  const W = 900, H = 190;
+  const PL = 46, PR = 12, PT = 14, PB = 28;
+  const cw = W - PL - PR;
+  const ch = H - PT - PB;
+
   const vals = data.map(function(d){ return d.v; });
-  const mn   = Math.min.apply(null,vals);
-  const mx   = Math.max.apply(null,vals);
-  const rng  = mx - mn || 1;
-  const pts  = data.map(function(d,i){
-    const x = (i/(data.length-1))*W;
-    const y = H - 2 - ((d.v - mn)/rng*(H-4));
-    return x.toFixed(1)+','+y.toFixed(1);
+  let mn = hd.min !== null ? +hd.min : Math.min.apply(null, vals);
+  let mx = hd.max !== null ? +hd.max : Math.max.apply(null, vals);
+  const spread = mx - mn || 2;
+  mn = mn - spread * 0.08;
+  mx = mx + spread * 0.08;
+  const yRng = mx - mn;
+
+  const t0 = data[0].ts;
+  const t1 = data[data.length - 1].ts;
+  const tRng = t1 - t0 || 1;
+
+  function xp(ts) { return PL + (ts - t0) / tRng * cw; }
+  function yp(v)  { return PT + ch - (v - mn) / yRng * ch; }
+
+  // line color from last value quality
+  const lastV = vals[vals.length - 1];
+  const color = chartMetric === 'rsrp' ? Q_COLOR[qRsrp(lastV)]
+              : chartMetric === 'sinr' ? Q_COLOR[qSinr(lastV)]
+              : '#3b82f6';
+
+  // polyline
+  const pts = data.map(function(d){
+    return xp(d.ts).toFixed(1) + ',' + yp(d.v).toFixed(1);
   }).join(' ');
-  const color = Q_COLOR[qRsrp(vals[vals.length-1])] || '#94a3b8';
-  el.innerHTML =
-    '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:'+H+'px">' +
-    '<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linejoin="round"/>' +
+
+  // Y grid + labels (5 lines)
+  let gridSvg = '', yLblSvg = '';
+  for (var i = 0; i <= 4; i++) {
+    var yv = mn + (yRng / 4) * i;
+    var yy = yp(yv).toFixed(1);
+    gridSvg  += '<line x1="' + PL + '" y1="' + yy + '" x2="' + (W-PR) + '" y2="' + yy +
+                '" stroke="#334155" stroke-width="1"/>';
+    yLblSvg  += '<text x="' + (PL-4) + '" y="' + yy + '" text-anchor="end" dominant-baseline="middle"' +
+                ' fill="#94a3b8" font-size="10">' + Math.round(yv) + '</text>';
+  }
+
+  // X axis labels
+  const intervalSec = chartHours <= 6 ? 3600 : chartHours <= 48 ? 14400 : 86400;
+  const nowEpoch  = Math.floor(Date.now() / 1000);
+  const sinceEpoch = hd.since || (nowEpoch - chartHours * 3600);
+  let xLblSvg = '';
+  var lt = Math.ceil(sinceEpoch / intervalSec) * intervalSec;
+  while (lt <= nowEpoch) {
+    if (lt >= t0 && lt <= t1) {
+      var xx = xp(lt).toFixed(1);
+      var d  = new Date(lt * 1000);
+      var lbl = chartHours <= 48
+        ? pad2(d.getHours()) + ':' + pad2(d.getMinutes())
+        : (d.getMonth()+1) + '/' + d.getDate() + ' ' + pad2(d.getHours()) + 'h';
+      xLblSvg += '<line x1="' + xx + '" y1="' + PT + '" x2="' + xx + '" y2="' + (H-PB) +
+                 '" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="3,3"/>';
+      xLblSvg += '<text x="' + xx + '" y="' + (H-PB+14) + '" text-anchor="middle"' +
+                 ' fill="#94a3b8" font-size="10">' + lbl + '</text>';
+    }
+    lt += intervalSec;
+  }
+
+  const unit = chartMetric === 'sinr' || chartMetric === 'rsrq' ? 'dB' : 'dBm';
+
+  wrap.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+    gridSvg + xLblSvg + yLblSvg +
+    '<text x="' + PL + '" y="' + (PT-2) + '" fill="#64748b" font-size="9">' +
+      chartMetric.toUpperCase() + ' (' + unit + ')</text>' +
+    '<polyline points="' + pts + '" fill="none" stroke="' + color +
+      '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
     '</svg>';
 }
+
+function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+async function fetchChart() {
+  const url = HIST + '?metric=' + chartMetric + '&hours=' + chartHours + '&_=' + Date.now();
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return;
+    const hd = await r.json();
+    drawChart(hd);
+    const info = document.getElementById('chart-info');
+    if (info) info.textContent = hd.count ? hd.count + ' pts' : '';
+  } catch(_) {}
+}
+
+// ---------------------------------------------------------------------------
+// chart controls
+// ---------------------------------------------------------------------------
+document.getElementById('metric-btns').addEventListener('click', function(e) {
+  const btn = e.target.closest('.chart-btn');
+  if (!btn || !btn.dataset.metric) return;
+  chartMetric = btn.dataset.metric;
+  document.querySelectorAll('#metric-btns .chart-btn').forEach(function(b){
+    b.classList.toggle('active', b === btn);
+  });
+  fetchChart();
+});
+
+document.getElementById('hours-btns').addEventListener('click', function(e) {
+  const btn = e.target.closest('.chart-btn');
+  if (!btn || !btn.dataset.hours) return;
+  chartHours = +btn.dataset.hours;
+  document.querySelectorAll('#hours-btns .chart-btn').forEach(function(b){
+    b.classList.toggle('active', b === btn);
+  });
+  fetchChart();
+});
 
 // ---------------------------------------------------------------------------
 // main fetch & render
@@ -475,6 +674,7 @@ async function refresh() {
     updatePing(d.ping);
     updateTemp(d.temp);
     updateCollectors(d.collectors);
+    updateConfig(d.config);
     updateEvents(d.events);
 
     document.getElementById('updated').textContent = new Date().toLocaleTimeString();
@@ -485,13 +685,7 @@ async function refresh() {
     console.error('API error:', e);
   }
 
-  try {
-    const hr = await fetch(HIST + '?metric=rsrp&n=40&_=' + Date.now());
-    if (hr.ok) {
-      const hd = await hr.json();
-      if (hd && hd.data) drawSparkline(hd.data);
-    }
-  } catch(_) {}
+  fetchChart();
 }
 
 function tick() {

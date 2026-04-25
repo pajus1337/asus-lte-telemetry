@@ -157,13 +157,40 @@ BEGIN { printf "{"; sep="" }
 END { printf "}" }')
 
 # ---------------------------------------------------------------------------
-# mode — from config.ini [sampling] section
+# mode + config — from config.ini
 # ---------------------------------------------------------------------------
 _mode="normal"
+_cfg_json="null"
 if [ -f "$CONFIG_FILE" ]; then
     _mode=$(grep -E '^[[:space:]]*mode[[:space:]]*=' "$CONFIG_FILE" 2>/dev/null \
             | head -1 | sed 's/.*=[[:space:]]*//' | sed 's/[[:space:]]*$//')
     [ -z "$_mode" ] && _mode="normal"
+
+    _cfg_json=$(awk '
+        /^\[/ { cur=substr($0,2,length($0)-2); next }
+        /^[[:space:]]*[^#;]/ && /=/ {
+            k=$0; v=$0
+            sub(/[[:space:]]*=.*/, "", k); sub(/^[[:space:]]*/, "", k)
+            sub(/[^=]*=[[:space:]]*/, "", v); sub(/[[:space:]]*#.*$/, "", v); sub(/[[:space:]]*$/, "", v)
+            if (cur == "general"     && k == "at_port")             cfg["at_port"]       = v
+            if (cur == "general"     && k == "log_level")           cfg["log_level"]     = v
+            if (cur == "general"     && k == "wan_interface")       cfg["wan_iface"]     = v
+            if (cur == "mode.normal" && k == "lte_interval_sec")    cfg["lte_interval"]  = v
+            if (cur == "mode.normal" && k == "system_interval_sec") cfg["sys_interval"]  = v
+            if (cur == "mode.normal" && k == "ping_interval_sec")   cfg["ping_interval"] = v
+            if (cur == "dashboard"   && k == "port")                cfg["dash_port"]     = v
+            if (cur == "retention"   && k == "days")                cfg["retention_days"]= v
+            if (cur == "auto_switch" && k == "enabled")             cfg["auto_switch"]   = v
+            if (cur == "events"      && k == "sinr_low_threshold")  cfg["sinr_threshold"]= v
+        }
+        END {
+            printf "{"
+            sep=""
+            for (k in cfg) { printf "%s\"%s\":\"%s\"", sep, k, cfg[k]; sep="," }
+            printf "}"
+        }
+    ' "$CONFIG_FILE" 2>/dev/null)
+    [ -z "$_cfg_json" ] && _cfg_json="null"
 fi
 
 # ---------------------------------------------------------------------------
@@ -195,5 +222,6 @@ printf '"system":%s,' "$_sys_json"
 printf '"ping":%s,' "$_ping_json"
 printf '"temp":%s,' "$_temp_json"
 printf '"collectors":%s,' "$_col_json"
+printf '"config":%s,' "$_cfg_json"
 printf '"events":%s' "$_ev_json"
 printf '}\n'
