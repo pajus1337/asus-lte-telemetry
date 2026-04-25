@@ -437,6 +437,13 @@ info "On stock firmware, cron_jobs nvram does not persist — we use a different
 info "  - Add the dispatcher to /jffs/scripts/entware-boot.sh (runs at boot)"
 info "  - Also add a crontab entry via crond's config file"
 
+_autostart_web="no"
+if [ -x /opt/sbin/lighttpd ] || command -v lighttpd >/dev/null 2>&1; then
+    if ask_yn "Auto-start dashboard on boot?" default_n; then
+        _autostart_web="yes"
+    fi
+fi
+
 if ask_yn "Register dispatcher with cron now?" default_y; then
     # Add a wakeup loop to /opt/etc/init.d/ so it starts with Entware
     START_SCRIPT="/opt/etc/init.d/S99asus-lte-telemetry"
@@ -452,19 +459,27 @@ ARGS=
 PREARGS=
 DESC="asus-lte-telemetry background dispatcher"
 PATH=/opt/bin:/opt/sbin:/sbin:/bin:/usr/sbin:/usr/bin
+INSTALL_BASE=$INSTALL_BASE
+AUTOSTART_DASHBOARD=$_autostart_web
 
 start_service() {
-    if [ -x "$INSTALL_BASE/bin/dispatcher.sh" ]; then
-        # Use nohup + background so it survives the init script exiting
-        nohup sh -c "while true; do $INSTALL_BASE/bin/dispatcher.sh >> $INSTALL_BASE/logs/dispatcher.log 2>&1; /opt/bin/sleep 60; done" >/dev/null 2>&1 &
+    if [ -x "\$INSTALL_BASE/bin/dispatcher.sh" ]; then
+        nohup sh -c "while true; do \$INSTALL_BASE/bin/dispatcher.sh >> \$INSTALL_BASE/logs/dispatcher.log 2>&1; /opt/bin/sleep 60; done" >/dev/null 2>&1 &
         echo "asus-lte-telemetry dispatcher started"
+    fi
+    if [ "\$AUTOSTART_DASHBOARD" = "yes" ]; then
+        sh "\$INSTALL_BASE/bin/rmon" web start >/dev/null 2>&1 || true
+        echo "asus-lte-telemetry dashboard started"
     fi
 }
 
 stop_service() {
-    /opt/bin/pkill -f "$INSTALL_BASE/bin/dispatcher.sh" 2>/dev/null || true
+    /opt/bin/pkill -f "\$INSTALL_BASE/bin/dispatcher.sh" 2>/dev/null || true
     /opt/bin/pkill -f "asus-lte-telemetry-dispatcher" 2>/dev/null || true
     echo "asus-lte-telemetry dispatcher stopped"
+    if [ "\$AUTOSTART_DASHBOARD" = "yes" ]; then
+        sh "\$INSTALL_BASE/bin/rmon" web stop >/dev/null 2>&1 || true
+    fi
 }
 
 case "\$1" in
@@ -476,6 +491,9 @@ esac
 EOF
     chmod +x "$START_SCRIPT"
     ok "Init script installed: $START_SCRIPT"
+    if [ "$_autostart_web" = "yes" ]; then
+        ok "Dashboard auto-start on boot: enabled"
+    fi
     info "Note: dispatcher will actually start after next reboot."
     info "To start now: $START_SCRIPT start"
 else
