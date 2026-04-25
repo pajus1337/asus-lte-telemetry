@@ -3,48 +3,50 @@
 Lightweight LTE modem and system monitoring for **ASUS 4G-AC86U** routers running
 stock firmware with [Entware](https://github.com/Entware/Entware).
 
-Collects signal quality, carrier aggregation, temperature, system and network
-metrics from a built-in Quectel EM12-G modem, stores them in SQLite, and serves
-a local LAN dashboard. Designed to run within the constraints of the stock ASUS
-firmware (no Merlin, no custom kernel) with minimal RAM footprint.
+Collects signal quality, carrier aggregation, neighbour cells, temperature, system
+and network metrics from a built-in Quectel EM12-G modem, stores them in SQLite,
+and serves a local LAN dashboard. Designed to run within the constraints of stock
+ASUS firmware (no Merlin, no custom kernel), cooperating with the original firmware
+rather than replacing it.
 
 ## Features
 
-- **LTE signal tracking** — RSRP, RSRQ, RSSI, SINR, CQI, TX power, per-antenna RSRP
-- **Carrier aggregation monitoring** — PCC/SCC, band lock, SCC drop detection
-- **Neighbour cell visibility** — intra-freq and inter-freq neighbours
-- **Temperature monitoring** — 8 modem thermal sensors
+- **LTE signal tracking** — RSRP, RSRQ, RSSI, SINR, CQI, TX power, per-antenna RSRP (4 RX paths)
+- **Carrier aggregation monitoring** — PCC/SCC band, RSRP/RSRQ/SINR per carrier, SCC drop detection
+- **Neighbour cell panel** — intra-freq, inter-freq, WCDMA, GSM neighbours with RSRP colouring
+- **Band locking** — restrict modem to specific LTE bands via `rmon band lock`; adjustable from web UI
+- **Temperature monitoring** — 8 modem thermal sensors (Quectel QTEMP)
 - **System health** — uptime, load, RAM, SWAP, disk usage, process health
-- **Network quality** — multi-target ping monitoring (configurable)
-- **Transfer stats** — via vnstat on `wwan0`
-- **Event detection** — cell changes, SCC drops, SINR degradation, reboots
-- **Dynamic sampling** — configurable per-mode intervals (normal / debug / night / custom)
-- **Auto-switch mode** — increases sampling rate on signal degradation
-- **Local dashboard** — LAN-only HTML/CSS/JS SPA, no cloud, no telemetry, no external deps
-- **Data retention** — 180 days by default, manual reset and purge supported
+- **Network quality** — multi-target ping monitoring with configurable targets
+- **Transfer stats** — via vnstat on `wwan0` (optional)
+- **Event detection** — cell changes, SCC drops, SINR degradation, ping loss, reboots
+- **Dynamic sampling** — normal / debug / night modes with configurable intervals
+- **Auto-mode switching** — increases sampling rate on signal degradation or cell change
+- **Web dashboard** — LAN-only tab SPA (Overview / Signal / Events / Config); 24h charts; no cloud, no external deps
+- **Web command interface** — band lock/unlock, sampling mode switch directly from browser
+- **Data retention** — 180 days by default; manual reset and purge supported
+- **Firmware-cooperative** — uses the same AT port lock (`flock /tmp/at_cmd_lock`) as ASUS firmware; auto-detects active AT port from `nvram`
 
 ## Supported hardware
 
 | Component | Model                              | Status   |
 |-----------|------------------------------------|----------|
-| Router    | ASUS 4G-AC86U                      | Primary  |
+| Router    | ASUS 4G-AC86U                      | Tested   |
 | CPU       | Broadcom BCM4906 (ARMv8 / aarch64) | Required |
-| Modem     | Quectel EM12-G                     | Tested on firmware `EM12GPAR01A21M4G` |
+| Modem     | Quectel EM12-G                     | Tested on `EM12GPAR01A21M4G` |
+| Firmware  | ASUS stock `3.0.0.4.382.x`         | No Merlin required |
 
-Other Quectel modems (EM06, EP06, RM500Q) and other ASUS routers with Entware
-may work with minor adjustments — see `docs/PORTING.md`.
+Other Quectel modems (EM06, EP06) and ASUS routers with Entware may work with minor adjustments.
 
 ## Requirements
 
-- ASUS 4G-AC86U running stock firmware `3.0.0.4.382.x` or similar
+- ASUS 4G-AC86U with stock firmware `3.0.0.4.382.x` or similar
 - [Entware](https://github.com/Entware/Entware) installed and autostarted
-  (see parent repo for installation guide)
-- SSH access to the router as `admin`
-- A persistent mount point on an EXT4 partition (recommended: USB stick labelled
-  `System`, mounted at `/tmp/mnt/System` — this is the same partition used
-  by Entware)
-- Serial port `/dev/ttyUSB2` available for AT commands (not exclusively held
-  by another process)
+- SSH access (router default: port 666)
+- Persistent EXT4 mount point — recommended: USB stick labelled `System` at `/tmp/mnt/System`
+- Entware packages (installed automatically by `install.sh`):
+  `sqlite3-cli`, `lighttpd`, `lighttpd-mod-cgi`, `coreutils-sleep`, `coreutils-mktemp`,
+  `coreutils-date`, `coreutils-stat`, `coreutils-timeout`, `psmisc`, `lsof`
 
 ## Quick start
 
@@ -70,19 +72,19 @@ sh install.sh
 git clone https://github.com/pajus1337/asus-lte-telemetry.git
 scp -P 666 -r asus-lte-telemetry admin@192.168.50.1:/tmp/mnt/System/
 
-# Then on the router:
+# On the router:
 cd /tmp/mnt/System/asus-lte-telemetry
 sh install.sh
 ```
 
 The installer will:
 
-1. Verify environment (Entware, architecture, modem presence, port accessibility)
-2. Install required Entware packages (`sqlite3-cli`, `vnstat`, `coreutils-*`, etc.)
-3. Optionally install `busybox-httpd` for the web dashboard
+1. Verify environment (Entware, architecture, modem port, binary availability)
+2. Install required Entware packages
+3. Ask whether to auto-start the dashboard on every boot
 4. Create directory structure at `/tmp/mnt/System/asus-lte-telemetry/`
-5. Initialise SQLite schema
-6. Register the dispatcher with Entware init (`/opt/etc/init.d/S99asus-lte-telemetry`)
+5. Initialise SQLite schema (WAL mode)
+6. Register the dispatcher loop with Entware init (`/opt/etc/init.d/S99asus-lte-telemetry`)
 7. Run a smoke test
 
 After install:
@@ -96,6 +98,7 @@ rmon status
 
 # Start the web dashboard
 rmon web start
+# Open http://192.168.50.1:8080/ in any browser on your LAN
 ```
 
 Removal:
@@ -106,83 +109,135 @@ sh /tmp/mnt/System/asus-lte-telemetry/uninstall.sh
 
 ## CLI
 
-After installation, the `rmon` command becomes available:
+The `rmon` command is available after installation:
 
 ```sh
-rmon status                     # current collection state and DB size
-rmon tail lte 20                # last 20 LTE samples
-rmon tail lte --follow          # live tail (refreshes every 5 s)
-rmon plot rsrp 40               # ASCII chart of last 40 RSRP samples
-rmon diag                       # modem info, signal summary, recent errors
-rmon mode debug                 # switch to high-frequency sampling
-rmon mode normal                # back to normal
-rmon web start                  # start HTTP dashboard (BusyBox httpd)
-rmon web stop                   # stop the dashboard
-rmon web status                 # show dashboard URL and running state
-rmon export --last 24h          # export recent data as CSV
-rmon events 20                  # last 20 events
-rmon db info                    # row counts, time range, file size
-rmon db reset                   # wipe DB (creates backup, prompts confirmation)
+rmon status                       # collector state, DB size, last-run times
+rmon tail lte 20                  # last 20 LTE samples
+rmon tail lte --follow            # live tail, refreshes every 5 s
+rmon plot rsrp 40                 # ASCII chart of last 40 RSRP samples
+rmon diag                         # modem info, signal summary, CA status, recent errors
+rmon mode debug                   # switch to high-frequency sampling
+rmon mode normal                  # back to normal
+rmon band                         # show active LTE bands (live AT query)
+rmon band lock B1,B3,B20          # restrict modem to these bands (immediate)
+rmon band lock B1,B3 --reboot     # restrict, takes effect after modem reboot
+rmon band unlock                  # restore original full-band config
+rmon web start                    # start dashboard (lighttpd on port 8080)
+rmon web stop
+rmon web status
+rmon export --last 24h            # export recent data as CSV to stdout
+rmon events 20                    # last 20 events
+rmon db info                      # row counts, time range, file size
+rmon db reset                     # wipe DB (creates backup, prompts confirmation)
 rmon db purge --older-than 30d
 rmon help
 ```
 
+### Band locking
+
+`rmon band lock` restricts the modem to the specified bands via `AT+QCFG="band"`.
+The original full-band mask is saved automatically and can be restored with
+`rmon band unlock`. The stock ASUS firmware does **not** reset the band configuration
+automatically, so locked bands persist across router reboots.
+
+Immediate effect (`--reboot` not set) causes a brief LTE reconnect (~10-30s).
+`quectel-CM` handles the reconnect transparently. Use `--reboot` to defer the
+change to the next modem power cycle with zero impact on the current connection.
+
+```sh
+# Lock to B1 + B3 (common European FDD aggregation pair)
+rmon band lock B1,B3
+
+# Check result
+rmon band
+```
+
 ## Dashboard
 
-Once the dispatcher has run for a few minutes, start the dashboard and open the
-URL in any browser on your LAN:
+Start the dashboard and open the URL in any browser on your LAN:
 
 ```sh
 rmon web start
-# Dashboard: http://192.168.50.1:8080/
+# http://192.168.50.1:8080/
 ```
 
-The dashboard auto-refreshes every 30 s and shows:
+The dashboard auto-refreshes every 30 s. It is organised into four tabs:
 
-- Signal quality (RSRP/RSRQ/SINR) with quality badges and RSRP sparkline
-- Carrier aggregation (PCC + SCCs, per-carrier band/RSRP/SINR)
-- System metrics (RAM, load, uptime, disk, CPU temp)
-- Ping targets (loss%, RTT)
-- Modem temperature sensors
-- Collector health (last-run age and status for all four collectors)
-- Last 5 events
+| Tab | Contents |
+|-----|----------|
+| **Overview** | Signal summary (RSRP/RSRQ/RSSI/SINR, quality badges, CellMapper link), CA status, system metrics, ping, modem temperatures, collector health |
+| **Signal** | Neighbour cells table (intra/inter-freq, WCDMA, GSM) with RSRP colouring; 24-hour chart with metric selector (RSRP/SINR/RSRQ/RSSI) and time range (6h/24h/3d/7d) |
+| **Events** | Timeline of detected events (cell change, SCC drop, SINR alert, ping loss, reboot…) |
+| **Config** | Read-only view of active config.ini settings; **Band Control** — checkbox grid for selecting active LTE bands, lock/unlock buttons, reboot-only option |
 
 Port is configurable in `config.ini` under `[dashboard] port` (default 8080).
-
-## Data retention
-
-- Raw samples: 180 days (configurable)
-- Events: retained indefinitely (they are sparse)
-- Automatic cleanup runs once per day
-- Manual commands: `rmon db purge`, `rmon db reset`
 
 ## Architecture
 
 ```
-      /opt/etc/init.d/S99asus-lte-telemetry
-                 │  (60 s loop)
-                 ▼
-         bin/dispatcher.sh ──reads──▶ config.ini
-                 │
-                 ├──▶ collector-lte.sh    ──▶ AT commands  ──▶ SQLite
-                 ├──▶ collector-system.sh ──▶ /proc        ──▶ SQLite
-                 ├──▶ collector-ping.sh   ──▶ ping         ──▶ SQLite
-                 └──▶ collector-vnstat.sh ──▶ vnstat       ──▶ SQLite
-                                                  │
-                                                  ▼
-                                   BusyBox httpd (rmon web start)
-                                        │
-                                        ├──▶ web/index.html       (SPA dashboard)
-                                        ├──▶ web/cgi-bin/api.cgi  (current state JSON)
-                                        └──▶ web/cgi-bin/history.cgi (sparkline data)
+/opt/etc/init.d/S99asus-lte-telemetry
+            │  (60 s loop)
+            ▼
+    bin/dispatcher.sh ──reads──▶ config.ini
+            │
+            ├──▶ collector-lte.sh    ──▶ AT commands ──▶ SQLite (6 tables)
+            ├──▶ collector-system.sh ──▶ /proc        ──▶ SQLite (2 tables)
+            ├──▶ collector-ping.sh   ──▶ ping         ──▶ SQLite (1 table)
+            └──▶ collector-vnstat.sh ──▶ vnstat       ──▶ events table
+
+lighttpd (Entware, rmon web start)
+    ├──▶ web/index.html          (tab SPA: Overview/Signal/Events/Config)
+    ├──▶ web/cgi-bin/api.cgi     (read-only JSON: signal, CA, neighbours, system…)
+    ├──▶ web/cgi-bin/history.cgi (time-range chart data)
+    └──▶ web/cgi-bin/cmd.cgi     (write commands: band lock/unlock, mode change)
+
+bin/at-send
+    ├── flock -x /tmp/at_cmd_lock  (same lock as ASUS firmware modem_at.sh)
+    ├── port: nvram get usb_modem_act_int → fallback /dev/ttyUSB3
+    ├── 0.2 s buffer drain
+    └── echo-based response filtering
 ```
+
+### Firmware coexistence
+
+The ASUS stock firmware accesses the modem AT port (typically `/dev/ttyUSB3`) via
+its own `modem_at.sh` script, serialised with `flock -x /tmp/at_cmd_lock`. This
+project uses the **same lock**, so both never access the port simultaneously.
+
+The firmware also reads the active AT port node from `nvram get usb_modem_act_int`
+— `bin/at-send` does the same, so it follows any port reassignment automatically.
+
+`AT+QCFG="band"` (band config) is written by `rmon band lock/unlock` and **is not
+touched** by the firmware's automatic routines — only by an explicit mode change
+in the router UI, which modifies `nwscanmode`, not the band bitmask.
+
+## Data model
+
+13 SQLite tables (all timestamps are unix epoch INTEGER):
+
+| Table | Contents |
+|-------|----------|
+| `lte_samples` | Serving cell: RRC state, RAT, band, RSRP/RSRQ/RSSI/SINR, CQI, TX power, operator, per-antenna RSRP |
+| `ca_samples` | Per-carrier CA data (FK → lte_samples) |
+| `neighbour_cells` | Intra/inter-freq neighbours (FK → lte_samples) |
+| `temp_samples` | 8 modem thermal sensors |
+| `system_samples` | Uptime, load, RAM, SWAP, disk, CPU temp, wwan0 counters |
+| `process_health` | quectel-CM, dnsmasq, httpd, smbd, crond alive flags |
+| `ping_samples` | Per-target RTT and loss stats |
+| `pdp_context` | APN, WAN IP, DNS (inserted on change only) |
+| `modem_counters` | TX/RX byte counters from AT+QGDCNT |
+| `events` | Detected events with type, severity, JSON details |
+| `collector_state` | Per-collector last-run timestamp and status |
+| `device_info` | Modem model, IMEI, firmware, band config (at install) |
+| `meta` | Schema version, creation timestamp |
 
 ## Project status
 
-**v0.4.11** — stable, tested on ASUS 4G-AC86U with firmware `3.0.0.4.382.x` and
-modem firmware `EM12GPAR01A21M4G`.
+**v0.5.0** — stable, tested on ASUS 4G-AC86U with firmware `3.0.0.4.382.x` and
+modem firmware `EM12GPAR01A21M4G_02.001.02.001`.
 
-All collectors, the dispatcher, and the HTTP dashboard are implemented and
+All collectors, dispatcher, HTTP dashboard, and band locking are implemented and
 confirmed working. Breaking changes may still occur before v1.0.
 
 ## License
@@ -193,8 +248,8 @@ MIT — see `LICENSE`.
 
 Created by [@pajus1337](https://github.com/pajus1337).
 
-Companion to [asus-4g-ac86u-entware-stock-firmware](https://github.com/pajus1337/asus-4g-ac86u-entware-stock-firmware)
-which documents the underlying Entware setup on ASUS 4G-AC86U stock firmware.
+Companion repository: [asus-4g-ac86u-entware-stock-firmware](https://github.com/pajus1337/asus-4g-ac86u-entware-stock-firmware)
+— documents the underlying Entware setup on ASUS 4G-AC86U stock firmware.
 
 AT command documentation based on Quectel EM12-G specifications and empirical
-testing on firmware `EM12GPAR01A21M4G`.
+testing on firmware `EM12GPAR01A21M4G_02.001.02.001`.
