@@ -99,6 +99,29 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# neighbours — cells from latest neighbour scan (linked to latest lte_sample)
+# ---------------------------------------------------------------------------
+_neigh_sample_id=$("$SQLITE" "$DB_PATH" \
+    "SELECT id FROM lte_samples ORDER BY ts DESC LIMIT 1;" 2>/dev/null)
+_neigh_json="[]"
+if [ -n "$_neigh_sample_id" ]; then
+    _neigh_json=$("$SQLITE" -separator '|' "$DB_PATH" \
+        "SELECT neighbour_type, rat, earfcn, pci, rsrp, rsrq, sinr
+         FROM neighbour_cells WHERE sample_id = ${_neigh_sample_id}
+         ORDER BY rsrp DESC LIMIT 20;" 2>/dev/null | awk -F'|' '
+    function n(v) { return (v=="" ? "null" : v) }
+    function s(v) { return (v=="" ? "null" : "\"" v "\"") }
+    BEGIN { printf "["; sep="" }
+    {
+        printf "%s{\"type\":%s,\"rat\":%s,\"earfcn\":%s,\"pci\":%s,\"rsrp\":%s,\"rsrq\":%s,\"sinr\":%s}",
+            sep, s($1), s($2), n($3), n($4), n($5), n($6), n($7)
+        sep=","
+    }
+    END { printf "]" }')
+    [ -z "$_neigh_json" ] && _neigh_json="[]"
+fi
+
+# ---------------------------------------------------------------------------
 # ping — latest ping_samples grouped by target
 # ---------------------------------------------------------------------------
 _ping_ts=$("$SQLITE" "$DB_PATH" "SELECT MAX(ts) FROM ping_samples;" 2>/dev/null)
@@ -218,6 +241,7 @@ printf '"generated_ts":%s,' "$_now"
 printf '"mode":"%s",' "$_mode"
 printf '"signal":%s,' "$_sig_json"
 printf '"ca":%s,' "$_ca_json"
+printf '"neighbours":%s,' "$_neigh_json"
 printf '"system":%s,' "$_sys_json"
 printf '"ping":%s,' "$_ping_json"
 printf '"temp":%s,' "$_temp_json"

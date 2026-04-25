@@ -184,6 +184,39 @@ header {
 .col-error   { color: var(--red); }
 .col-never   { color: var(--border); }
 .empty { color: var(--muted); font-style: italic; padding: 4px 0; }
+/* neighbours */
+.neigh-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.neigh-table th {
+  color: var(--muted);
+  font-weight: normal;
+  text-align: left;
+  padding: 2px 8px 6px 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.neigh-table td {
+  padding: 3px 8px 3px 0;
+  border-bottom: 1px solid rgba(51,65,85,.4);
+  white-space: nowrap;
+}
+.neigh-table tr:last-child td { border-bottom: none; }
+.neigh-type {
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.nt-intra { background: rgba(59,130,246,.15); color: #93c5fd; }
+.nt-inter { background: rgba(245,158,11,.15); color: #fcd34d; }
+.nt-wcdma { background: rgba(147,51,234,.15); color: #c084fc; }
+.nt-gsm   { background: rgba(100,116,139,.15);color: #94a3b8; }
+.neigh-summary { color: var(--muted); font-size: 11px; margin-left: auto; }
 /* chart */
 .chart-controls {
   display: flex;
@@ -264,6 +297,15 @@ header {
   <div class="card">
     <div class="card-title"><span class="card-title-text">Carrier Aggregation</span></div>
     <div id="ca-body"><div class="empty">No CA data.</div></div>
+  </div>
+
+  <!-- Neighbours -->
+  <div class="card wide">
+    <div class="card-title">
+      <span class="card-title-text">Neighbour Cells</span>
+      <span class="neigh-summary" id="neigh-summary"></span>
+    </div>
+    <div id="neigh-body"><div class="empty">No neighbour data.</div></div>
   </div>
 
   <!-- History Chart -->
@@ -533,6 +575,50 @@ function updateCollectors(cols) {
   }).join('');
 }
 
+function updateNeighbours(neighbours) {
+  const el   = document.getElementById('neigh-body');
+  const sumEl = document.getElementById('neigh-summary');
+  if (!neighbours || neighbours.length === 0) {
+    el.innerHTML = '<div class="empty">No neighbour data (collector may not have received AT+QENG response yet).</div>';
+    if (sumEl) sumEl.textContent = '';
+    return;
+  }
+
+  // build summary counts
+  var counts = {};
+  neighbours.forEach(function(n) { counts[n.type] = (counts[n.type] || 0) + 1; });
+  var parts = [];
+  ['intra','inter','wcdma','gsm'].forEach(function(t) {
+    if (counts[t]) parts.push(counts[t] + ' ' + t);
+  });
+  if (sumEl) sumEl.textContent = neighbours.length + ' cells: ' + parts.join(' · ');
+
+  var html = '<table class="neigh-table"><thead><tr>' +
+    '<th>Type</th><th>RAT</th><th>EARFCN</th><th>PCI</th>' +
+    '<th>RSRP</th><th>RSRQ</th><th>SINR</th>' +
+    '</tr></thead><tbody>';
+
+  neighbours.forEach(function(n) {
+    var t    = (n.type || 'unknown').toLowerCase();
+    var tCls = t === 'intra' ? 'nt-intra' : t === 'inter' ? 'nt-inter'
+             : t === 'wcdma' ? 'nt-wcdma' : 'nt-gsm';
+    var qr   = qRsrp(n.rsrp);
+    var qq   = qRsrq(n.rsrq);
+    html += '<tr>' +
+      '<td><span class="neigh-type ' + tCls + '">' + esc(n.type || '?') + '</span></td>' +
+      '<td style="color:var(--muted)">' + esc(n.rat || '—') + '</td>' +
+      '<td>' + (n.earfcn != null ? n.earfcn : '—') + '</td>' +
+      '<td><strong>' + (n.pci != null ? n.pci : '—') + '</strong></td>' +
+      '<td class="q-' + qr + '">' + (n.rsrp != null ? n.rsrp + ' dBm' : '—') + '</td>' +
+      '<td class="q-' + qq + '">' + (n.rsrq != null ? n.rsrq + ' dB'  : '—') + '</td>' +
+      '<td>' + (n.sinr != null ? n.sinr + ' dB' : '—') + '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
 function updateConfig(cfg) {
   const el = document.getElementById('cfg-body');
   if (!cfg || typeof cfg !== 'object') { el.innerHTML = '<div class="empty">—</div>'; return; }
@@ -718,6 +804,7 @@ async function refresh() {
 
     updateSignal(d.signal);
     updateCA(d.ca);
+    updateNeighbours(d.neighbours);
     updateSystem(d.system);
     updatePing(d.ping);
     updateTemp(d.temp);
