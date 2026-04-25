@@ -90,13 +90,17 @@ The installer will:
 After install:
 
 ```sh
-# Start the dispatcher background loop
+# Start dispatcher (and dashboard, if auto-start was enabled during install)
 /opt/etc/init.d/S99asus-lte-telemetry start
 
 # Check collector status (after ~60 s)
 rmon status
+```
 
-# Start the web dashboard
+If you chose **auto-start dashboard** during installation, the dashboard is already
+running after the `S99 start` command above. If not, start it manually:
+
+```sh
 rmon web start
 # Open http://192.168.50.1:8080/ in any browser on your LAN
 ```

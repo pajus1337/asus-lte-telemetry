@@ -312,20 +312,17 @@ header {
 .chart-wrap svg { display: block; width: 100%; height: 200px; }
 
 /* config */
-.cfg-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0;
-}
+.cfg-grid { display: flex; flex-direction: column; }
 .cfg-item {
   display: flex;
   justify-content: space-between;
-  padding: 3px 0;
+  align-items: baseline;
+  padding: 6px 0;
   border-bottom: 1px solid rgba(51,65,85,.5);
-  gap: 8px;
+  gap: 12px;
 }
 .cfg-item:last-child { border-bottom: none; }
-.cfg-key { color: var(--muted); font-size: 12px; }
+.cfg-key { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .cfg-val { font-weight: 600; font-size: 12px; word-break: break-all; text-align: right; }
 
 /* band control */
@@ -818,7 +815,17 @@ function updateEvents(events) {
     var sevCls = 'sev-' + sev;
     var det = '';
     if (e.details) {
-      try { det = JSON.stringify(JSON.parse(e.details)); } catch(_) { det = String(e.details); }
+      var obj = null;
+      if (typeof e.details === 'object') {
+        obj = e.details;
+      } else {
+        try { obj = JSON.parse(e.details); } catch(_) { det = String(e.details); }
+      }
+      if (obj && typeof obj === 'object') {
+        det = Object.keys(obj).map(function(k) {
+          return k.replace(/_/g, ' ') + ': ' + obj[k];
+        }).join('  ·  ');
+      }
     }
     return '<div class="ev-row">' +
       '<span class="ev-time">' + esc(fmtTs(e.ts)) + '</span>' +
