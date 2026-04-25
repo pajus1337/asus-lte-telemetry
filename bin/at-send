@@ -13,7 +13,7 @@
 #   at-send "AT+COMMAND" [timeout_seconds]
 #
 # Environment variables (override defaults):
-#   AT_PORT          - serial port (default: /dev/ttyUSB2)
+#   AT_PORT          - serial port (overrides auto-detect; e.g. /dev/ttyUSB3)
 #   AT_TIMEOUT       - default timeout in seconds (default: 1.5)
 #   AT_INIT_DELAY    - delay before sending command (default: 0.2)
 #
@@ -25,15 +25,37 @@
 # Dependencies (Entware):
 #   coreutils-sleep  (for fractional-second sleep)
 #   coreutils-mktemp
+#
+# Locking:
+#   Uses flock -x /tmp/at_cmd_lock — the same lock as ASUS firmware
+#   (modem_at.sh). This prevents simultaneous tty access that corrupts AT
+#   responses and can trigger firmware LTE reconnect cycles.
 # =============================================================================
 
 set -u
 
-readonly PORT="${AT_PORT:-/dev/ttyUSB3}"
 readonly SLEEP_BIN="/opt/bin/sleep"
 readonly MKTEMP_BIN="/opt/bin/mktemp"
 readonly DEFAULT_TIMEOUT="${AT_TIMEOUT:-1.5}"
 readonly INIT_DELAY="${AT_INIT_DELAY:-0.2}"
+readonly AT_LOCK="/tmp/at_cmd_lock"
+
+# Resolve AT port: explicit env override > firmware nvram cache > hardcoded default.
+# ASUS firmware stores the active AT port in nvram usb_modem_act_int (e.g. "ttyUSB3").
+# Reading it avoids hardcoding a port that firmware may reassign.
+if [ -n "${AT_PORT:-}" ]; then
+    PORT="$AT_PORT"
+else
+    _nvram_node=""
+    if command -v nvram >/dev/null 2>&1; then
+        _nvram_node=$(nvram get usb_modem_act_int 2>/dev/null)
+    fi
+    if [ -n "$_nvram_node" ]; then
+        PORT="/dev/$_nvram_node"
+    else
+        PORT="/dev/ttyUSB3"
+    fi
+fi
 
 # -- argument parsing --------------------------------------------------------
 CMD="${1:-}"
@@ -74,6 +96,12 @@ fi
 TMP=$("$MKTEMP_BIN" /tmp/at-send.XXXXXX)
 trap 'rm -f "$TMP"' EXIT INT TERM
 
+# Acquire the same exclusive lock used by ASUS firmware (modem_at.sh line 25).
+# Prevents simultaneous port access that corrupts responses and triggers LTE
+# reconnect cycles in the router firmware.
+exec 9>"$AT_LOCK"
+flock -x 9
+
 # Flush stale data from the serial port's kernel receive buffer.
 # Other router processes may write AT commands to this port periodically,
 # leaving buffered garbage (including ERROR lines) that would corrupt our read.
@@ -99,6 +127,9 @@ printf '%s\r' "$CMD" > "$PORT"
 # Stop reader
 kill "$CAT_PID" 2>/dev/null
 wait "$CAT_PID" 2>/dev/null
+
+# Release lock (closing fd releases flock automatically)
+exec 9>&-
 
 # Emit response starting from our command echo.
 # The modem echoes back what we write (ATE1 default). Any data captured
