@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-04-25
+
+### Fixed
+
+- **`rmon web start`** — lighttpd config was missing `index-file.names = ("index.html")`.
+  Without this directive lighttpd returns 403 for `GET /` because directory listing is
+  disabled by default. Adding it makes the root URL serve the dashboard immediately.
+
 ## [0.4.6] - 2026-04-25
 
 ### Fixed

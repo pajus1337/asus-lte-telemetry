@@ -28,7 +28,7 @@
 
 set -u
 
-VERSION="0.4.6"
+VERSION="0.4.7"
 INSTALL_BASE="${INSTALL_BASE:-/tmp/mnt/System/asus-lte-telemetry}"
 DB_PATH="${DB_PATH:-$INSTALL_BASE/db/metrics.db}"
 CONFIG_FILE="${CONFIG_FILE:-$INSTALL_BASE/config/config.ini}"
@@ -746,6 +746,7 @@ cmd_web_start() {
             printf 'server.port = %s\n'             "$_port"
             printf 'server.bind = "0.0.0.0"\n'
             printf 'server.modules = ( "mod_cgi" )\n'
+            printf 'index-file.names = ( "index.html" )\n'
             printf 'cgi.assign = ( ".cgi" => "/bin/sh" )\n'
             printf 'server.errorlog = "%s/logs/httpd-error.log"\n' "$INSTALL_BASE"
         } > "$_conf"
