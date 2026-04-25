@@ -604,6 +604,7 @@ function qRsrq(v) {
   return 'vp';
 }
 function qTxPower(v) {
+  // v is in actual dBm (already divided by 10 at call site)
   if (v == null) return 'unknown';
   if (v < 0)  return 'excellent';
   if (v < 10) return 'good';
@@ -650,15 +651,20 @@ function cellMapperUrl(sig) {
   var dec = sig.cell_id_dec != null ? sig.cell_id_dec
           : (sig.cell_id_hex ? parseInt(sig.cell_id_hex, 16) : null);
   if (dec == null) return null;
+  // CellMapper expects eNB ID, not the full 28-bit cell ID.
+  // Lower 8 bits are the sector index within the eNB — strip them.
+  var enbId = Math.floor(dec / 256);
   return 'https://www.cellmapper.net/map#?type=LTE&mcc=' + sig.mcc +
-         '&mnc=' + sig.mnc + '&cell=' + dec +
+         '&mnc=' + sig.mnc + '&cell=' + enbId +
          (sig.pci != null ? '&physical_cell_id=' + sig.pci : '') + '&zoom=15';
 }
 
 function updateSignal(sig) {
   var el = document.getElementById('sig-body');
   if (!sig) { el.innerHTML = '<div class="empty">No LTE data yet.</div>'; return; }
-  var qr = qRsrp(sig.rsrp), qs = qSinr(sig.sinr), qq = qRsrq(sig.rsrq), qt = qTxPower(sig.tx_power);
+  // tx_power from modem is in 0.1 dBm units; convert to dBm for display and quality rating
+  var txDbm = sig.tx_power != null ? sig.tx_power / 10 : null;
+  var qr = qRsrp(sig.rsrp), qs = qSinr(sig.sinr), qq = qRsrq(sig.rsrq), qt = qTxPower(txDbm);
   var dec = sig.cell_id_dec != null ? sig.cell_id_dec
           : (sig.cell_id_hex ? parseInt(sig.cell_id_hex, 16) : null);
   var cmUrl = cellMapperUrl(sig);
@@ -684,7 +690,9 @@ function updateSignal(sig) {
     row('SINR',
       '<span class="q-' + qs + '">' + (sig.sinr != null ? sig.sinr + ' dB' : '—') + '</span>' +
       '<span class="qbadge b-' + qs + '">' + Q_LABEL[qs] + '</span>') +
-    row('TX Power', '<span class="q-' + qt + '">' + (sig.tx_power != null ? sig.tx_power + ' dBm' : '—') + '</span>') +
+    row('TX Power',
+      '<span class="q-' + qt + '">' + (txDbm != null ? txDbm.toFixed(1) + ' dBm' : '—') + '</span>' +
+      '<span class="qbadge b-' + qt + '">' + Q_LABEL[qt] + '</span>') +
     '<div class="row"><span class="lbl">Cell / PCI</span><span class="val" style="font-size:12px">' + cellVal + '</span></div>' +
     row('EARFCN', esc(sig.earfcn || '—'));
 }
