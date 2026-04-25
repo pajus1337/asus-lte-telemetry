@@ -199,6 +199,18 @@ header {
 }
 
 /* ping */
+.ping-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0 4px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .ping-row {
   display: flex;
   justify-content: space-between;
@@ -719,25 +731,36 @@ function updatePing(ping) {
     el.innerHTML = '<div class="empty">No ping data yet.</div>';
     return;
   }
-  el.innerHTML = ping.map(function(p) {
+  var header = '<div class="ping-header">' +
+    '<span class="ping-label">Host</span>' +
+    '<span>Packet loss</span>' +
+    '<span>RTT avg</span>' +
+    '</div>';
+  var rows = ping.map(function(p) {
     var loss = p.loss_pct != null ? p.loss_pct : '?';
     var cls  = loss === 0 ? 'ping-loss-ok' : loss < 10 ? 'ping-loss-warn' : 'ping-loss-bad';
-    var rtt  = p.rtt_avg_ms != null ? Number(p.rtt_avg_ms).toFixed(1) + ' ms' : '—';
+    var lossText = loss === 100 ? '100% (unreachable)' : loss + '%';
+    var rtt  = (loss === 100 || p.rtt_avg_ms == null) ? '—' : Number(p.rtt_avg_ms).toFixed(1) + ' ms';
     return '<div class="ping-row">' +
       '<span class="ping-label">' + esc(p.label || p.target) + '</span>' +
-      '<span class="' + cls + '">' + loss + '%</span>' +
+      '<span class="' + cls + '">' + lossText + '</span>' +
       '<span>' + rtt + '</span>' +
       '</div>';
   }).join('');
+  el.innerHTML = header + rows;
 }
 
 function updateTemp(temp) {
   var el = document.getElementById('temp-body');
-  if (!temp) { el.innerHTML = '<div class="empty">No temp data.</div>'; return; }
+  if (!temp) { el.innerHTML = '<div class="empty">No data — AT+QTEMP may be unavailable.</div>'; return; }
   var html = '';
   if (temp.xo_therm != null) html += row('XO therm',   temp.xo_therm  + ' °C');
   if (temp.mdm_case != null) html += row('Modem case', temp.mdm_case  + ' °C');
   if (temp.pa_therm != null) html += row('PA therm',   temp.pa_therm  + ' °C');
+  var tsens = [temp.tsens0, temp.tsens1, temp.tsens2, temp.tsens3, temp.tsens4];
+  tsens.forEach(function(v, i) {
+    if (v != null) html += row('Sensor ' + i, v + ' °C');
+  });
   el.innerHTML = html || '<div class="empty">No readings.</div>';
 }
 

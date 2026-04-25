@@ -147,15 +147,19 @@ fi
 # temp — latest temp_samples row
 # ---------------------------------------------------------------------------
 _temp_row=$("$SQLITE" -separator '|' "$DB_PATH" \
-    "SELECT ts, xo_therm_buf, mdm_case_therm, pa_therm1
+    "SELECT ts, xo_therm_buf, mdm_case_therm, pa_therm1,
+            tsens_tz_sensor0, tsens_tz_sensor1, tsens_tz_sensor2,
+            tsens_tz_sensor3, tsens_tz_sensor4
      FROM temp_samples ORDER BY ts DESC LIMIT 1;" 2>/dev/null)
 
 if [ -n "$_temp_row" ]; then
     _temp_json=$(echo "$_temp_row" | awk -F'|' '
     function n(v) { return (v=="" ? "null" : v) }
     {
-        printf "{\"ts\":%s,\"xo_therm\":%s,\"mdm_case\":%s,\"pa_therm\":%s}",
+        printf "{\"ts\":%s,\"xo_therm\":%s,\"mdm_case\":%s,\"pa_therm\":%s",
             n($1), n($2), n($3), n($4)
+        printf ",\"tsens0\":%s,\"tsens1\":%s,\"tsens2\":%s,\"tsens3\":%s,\"tsens4\":%s}",
+            n($5), n($6), n($7), n($8), n($9)
     }')
 else
     _temp_json="null"
