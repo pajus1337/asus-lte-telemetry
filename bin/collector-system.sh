@@ -95,7 +95,9 @@ check_process() {
 collect_process_health() {
     PROC_QUECTEL_CM=$(check_process "quectel-CM")
     PROC_DNSMASQ=$(check_process "dnsmasq")
-    PROC_HTTPD=$(check_process "httpd")
+    # lighttpd (Entware) is the actual web server; fall back to generic 'httpd'
+    PROC_HTTPD=$(check_process "lighttpd")
+    [ "$PROC_HTTPD" = "0" ] && PROC_HTTPD=$(check_process "httpd")
     PROC_SMBD=$(check_process "smbd")
     PROC_CROND=$(check_process "crond")
 
