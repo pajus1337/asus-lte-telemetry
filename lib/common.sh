@@ -105,7 +105,7 @@ acquire_lock() {
                 _lock_ts_file="${_lock_path}/ts"
                 if [ -f "$_lock_ts_file" ]; then
                     _lock_ts=$(cat "$_lock_ts_file" 2>/dev/null)
-                    _now=$(date '+%s' 2>/dev/null)
+                    _now=$(/opt/bin/date '+%s' 2>/dev/null)
                     if [ -n "$_lock_ts" ] && [ -n "$_now" ]; then
                         _age=$(( _now - _lock_ts ))
                         if [ "$_age" -gt "$_max_age" ]; then
@@ -130,7 +130,7 @@ acquire_lock() {
     # Atomic mkdir
     if mkdir "$_lock_path" 2>/dev/null; then
         echo $$ > "${_lock_path}/pid"
-        date '+%s' > "${_lock_path}/ts" 2>/dev/null
+        /opt/bin/date '+%s' > "${_lock_path}/ts" 2>/dev/null
         return 0
     else
         return 1
@@ -199,7 +199,7 @@ check_dependency() {
 
 # now_epoch — current unix timestamp
 now_epoch() {
-    date '+%s' 2>/dev/null
+    /opt/bin/date '+%s' 2>/dev/null
 }
 
 # is_integer VALUE — returns 0 if VALUE is an integer (positive or negative)

@@ -474,6 +474,7 @@ ARGS=
 PREARGS=
 DESC="asus-lte-telemetry background dispatcher"
 PATH=/opt/bin:/opt/sbin:/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
 INSTALL_BASE=$INSTALL_BASE
 AUTOSTART_DASHBOARD=$_autostart_web
 
