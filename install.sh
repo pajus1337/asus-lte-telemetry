@@ -480,8 +480,14 @@ AUTOSTART_DASHBOARD=$_autostart_web
 start_service() {
     sleep 3
     if [ -x "\$INSTALL_BASE/bin/dispatcher.sh" ]; then
-        nohup sh -c "while true; do \$INSTALL_BASE/bin/dispatcher.sh >> \$INSTALL_BASE/logs/dispatcher.log 2>&1; /opt/bin/sleep 60; done" >/dev/null 2>&1 &
-        echo "asus-lte-telemetry dispatcher started"
+        # Use sh -c with stdin from /dev/null instead of nohup.
+        # In a boot/init context there may be no controlling terminal, making
+        # nohup unreliable on some BusyBox builds. Redirecting stdin from
+        # /dev/null detaches the process from the terminal session; the &
+        # backgrounds it. dispatcher.sh redirects its own output to the log.
+        sh -c "while true; do \$INSTALL_BASE/bin/dispatcher.sh >> \$INSTALL_BASE/logs/dispatcher.log 2>&1; /opt/bin/sleep 60; done" </dev/null >/dev/null 2>/dev/null &
+        echo \$! > /tmp/asus-lte-telemetry-dispatcher.pid
+        echo "asus-lte-telemetry dispatcher started (pid=\$(cat /tmp/asus-lte-telemetry-dispatcher.pid))"
     fi
     if [ "\$AUTOSTART_DASHBOARD" = "yes" ]; then
         sh "\$INSTALL_BASE/bin/rmon" web start >/dev/null 2>&1 || true
@@ -492,6 +498,7 @@ start_service() {
 stop_service() {
     /opt/bin/pkill -f "\$INSTALL_BASE/bin/dispatcher.sh" 2>/dev/null || true
     /opt/bin/pkill -f "asus-lte-telemetry-dispatcher" 2>/dev/null || true
+    rm -f /tmp/asus-lte-telemetry-dispatcher.pid
     echo "asus-lte-telemetry dispatcher stopped"
     if [ "\$AUTOSTART_DASHBOARD" = "yes" ]; then
         sh "\$INSTALL_BASE/bin/rmon" web stop >/dev/null 2>&1 || true
