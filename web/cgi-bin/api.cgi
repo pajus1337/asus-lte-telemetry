@@ -29,7 +29,8 @@ _now=$(/opt/bin/date +%s 2>/dev/null || date +%s)
 _sig_row=$("$SQLITE" -separator '|' "$DB_PATH" \
     "SELECT ts, rrc_state, rat, duplex, mcc, mnc, cell_id_hex, cell_id_dec, pci,
             earfcn, band, rsrp, rsrq, rssi, sinr, cqi, tx_power,
-            operator, net_type
+            operator, net_type,
+            rsrp_rx0, rsrp_rx1, rsrp_rx2, rsrp_rx3
      FROM lte_samples ORDER BY ts DESC LIMIT 1;" 2>/dev/null)
 
 if [ -n "$_sig_row" ]; then
@@ -45,7 +46,9 @@ if [ -n "$_sig_row" ]; then
             n($10), n($11), n($12), n($13)
         printf "\"rssi\":%s,\"sinr\":%s,\"cqi\":%s,\"tx_power\":%s,",
             n($14), n($15), n($16), n($17)
-        printf "\"operator\":%s,\"net_type\":%s}", s($18), s($19)
+        printf "\"operator\":%s,\"net_type\":%s,", s($18), s($19)
+        printf "\"rsrp_rx0\":%s,\"rsrp_rx1\":%s,\"rsrp_rx2\":%s,\"rsrp_rx3\":%s}",
+            n($20), n($21), n($22), n($23)
     }')
 else
     _sig_json="null"
@@ -238,7 +241,24 @@ if [ -f "$_band_state" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# events — last 5
+# pdp — latest pdp_context row (WAN IP + APN for Connection card)
+# ---------------------------------------------------------------------------
+_pdp_json="null"
+_pdp_row=$("$SQLITE" -separator '|' "$DB_PATH" \
+    "SELECT ts, cid, apn, wan_ip, dns_primary, dns_secondary
+     FROM pdp_context ORDER BY ts DESC LIMIT 1;" 2>/dev/null)
+if [ -n "$_pdp_row" ]; then
+    _pdp_json=$(echo "$_pdp_row" | awk -F'|' '
+    function n(v) { return (v=="" ? "null" : v) }
+    function s(v) { return (v=="" ? "null" : "\"" v "\"") }
+    {
+        printf "{\"ts\":%s,\"cid\":%s,\"apn\":%s,\"wan_ip\":%s,\"dns1\":%s,\"dns2\":%s}",
+            n($1), n($2), s($3), s($4), s($5), s($6)
+    }')
+fi
+
+# ---------------------------------------------------------------------------
+# events — last 50
 # ---------------------------------------------------------------------------
 _ev_json=$("$SQLITE" -separator '|' "$DB_PATH" \
     "SELECT ts, event_type, severity, details
@@ -269,5 +289,6 @@ printf '"temp":%s,' "$_temp_json"
 printf '"collectors":%s,' "$_col_json"
 printf '"config":%s,' "$_cfg_json"
 printf '"bands":%s,' "$_bands_json"
+printf '"pdp":%s,' "$_pdp_json"
 printf '"events":%s' "$_ev_json"
 printf '}\n'

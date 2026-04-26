@@ -410,6 +410,23 @@ header {
 .band-msg.busy { background: rgba(59,130,246,.1); color: #93c5fd; border: 1px solid rgba(59,130,246,.2); }
 
 .empty { color: var(--muted); font-style: italic; padding: 4px 0; }
+
+/* antenna diversity */
+.ant-row { display:flex; align-items:center; gap:8px; padding:3px 0; }
+.ant-label { color:var(--muted); font-size:11px; min-width:30px; }
+.ant-bar-wrap { flex:1; height:5px; background:var(--border); border-radius:3px; overflow:hidden; }
+.ant-bar-fill { height:100%; border-radius:3px; transition:width .4s ease; }
+.ant-val { font-size:12px; min-width:74px; text-align:right; }
+
+/* mode selector */
+.mode-ctrl-row { display:flex; gap:8px; align-items:center; }
+.mode-select {
+  background:var(--card); color:var(--text); border:1px solid var(--border);
+  border-radius:4px; padding:5px 8px; font-size:12px; font-family:inherit;
+  flex:1; max-width:280px; cursor:pointer;
+}
+.mode-select:focus { outline:none; border-color:var(--accent); }
+.mode-msg { font-size:12px; min-height:16px; margin-top:6px; }
 </style>
 </head>
 <body>
@@ -473,6 +490,16 @@ header {
       <div id="temp-body"><div class="empty">No temp data.</div></div>
     </div>
 
+    <div class="card">
+      <div class="card-title"><span class="card-title-text">Antenna Diversity</span></div>
+      <div id="ant-body"><div class="empty">No antenna data.</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="card-title-text">Connection</span></div>
+      <div id="pdp-body"><div class="empty">No PDP context data.</div></div>
+    </div>
+
   </div>
 </div>
 
@@ -531,6 +558,20 @@ header {
 <!-- ========== TAB: Config ========== -->
 <div id="tab-config" class="tab-pane">
   <div class="grid">
+    <div class="card wide">
+      <div class="card-title"><span class="card-title-text">Sampling Mode</span></div>
+      <div id="mode-body">
+        <div class="mode-ctrl-row">
+          <select id="mode-select" class="mode-select">
+            <option value="normal">normal — standard intervals</option>
+            <option value="debug">debug — high-frequency sampling</option>
+            <option value="night">night — low-frequency sampling</option>
+          </select>
+          <button class="band-btn" onclick="applyMode()">Apply</button>
+        </div>
+        <div class="mode-msg" id="mode-msg"></div>
+      </div>
+    </div>
     <div class="card wide">
       <div class="card-title"><span class="card-title-text">Configuration</span></div>
       <div id="cfg-body"><div class="empty">—</div></div>
@@ -1029,6 +1070,89 @@ function updateConfig(cfg) {
 }
 
 // ---------------------------------------------------------------------------
+// updater — Sampling Mode (Config tab)
+// ---------------------------------------------------------------------------
+function updateMode(mode) {
+  var sel = document.getElementById('mode-select');
+  if (sel) sel.value = mode || 'normal';
+}
+
+function applyMode() {
+  var sel    = document.getElementById('mode-select');
+  var mode   = sel ? sel.value : 'normal';
+  var msgEl  = document.getElementById('mode-msg');
+  msgEl.textContent = 'Applying…';
+  msgEl.style.color = 'var(--muted)';
+  fetch(CMD + '?action=mode_set&value=' + encodeURIComponent(mode))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (j.ok) {
+        msgEl.textContent = 'Switched to ' + mode + ' mode.';
+        msgEl.style.color = 'var(--green)';
+        setTimeout(refresh, 1500);
+      } else {
+        msgEl.textContent = 'Error: ' + (j.error || 'unknown');
+        msgEl.style.color = 'var(--red)';
+      }
+    })
+    .catch(function(){
+      msgEl.textContent = 'Request failed.';
+      msgEl.style.color = 'var(--red)';
+    });
+}
+
+// ---------------------------------------------------------------------------
+// updater — Antenna Diversity (Overview)
+// ---------------------------------------------------------------------------
+function updateAntenna(sig) {
+  var el = document.getElementById('ant-body');
+  if (!el) return;
+  if (!sig) { el.innerHTML = '<div class="empty">No LTE data yet.</div>'; return; }
+  var rxs = [
+    {label:'RX0', v:sig.rsrp_rx0},
+    {label:'RX1', v:sig.rsrp_rx1},
+    {label:'RX2', v:sig.rsrp_rx2},
+    {label:'RX3', v:sig.rsrp_rx3},
+  ];
+  var hasAny = rxs.some(function(r){ return r.v != null && r.v > -140; });
+  if (!hasAny) {
+    el.innerHTML = '<div class="empty">No data (AT+QRSRP may be unavailable).</div>';
+    return;
+  }
+  el.innerHTML = rxs.map(function(rx) {
+    var v  = rx.v;
+    var nc = (v == null || v <= -140);
+    var q  = nc ? 'unknown' : qRsrp(v);
+    // -140..-80 dBm → 0%..100%
+    var pct = nc ? 0 : Math.max(0, Math.min(100, (v + 140) / 60 * 100));
+    var valStr = nc
+      ? '<span style="color:var(--muted)">—</span>'
+      : '<span class="q-' + q + '">' + v + ' dBm</span>';
+    return '<div class="ant-row">' +
+      '<span class="ant-label">' + rx.label + '</span>' +
+      '<div class="ant-bar-wrap"><div class="ant-bar-fill" style="width:' + pct.toFixed(0) + '%;background:' + Q_COLOR[q] + '"></div></div>' +
+      '<span class="ant-val">' + valStr + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+// ---------------------------------------------------------------------------
+// updater — Connection / PDP context (Overview)
+// ---------------------------------------------------------------------------
+function updatePdp(pdp) {
+  var el = document.getElementById('pdp-body');
+  if (!el) return;
+  if (!pdp || !pdp.wan_ip) {
+    el.innerHTML = '<div class="empty">No PDP context data yet.</div>';
+    return;
+  }
+  var html = row('WAN IP', esc(pdp.wan_ip || '—')) +
+             row('APN',    esc(pdp.apn    || '—'));
+  if (pdp.dns1) html += row('DNS', esc(pdp.dns1) + (pdp.dns2 ? ' / ' + esc(pdp.dns2) : ''));
+  el.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
 // chart
 // ---------------------------------------------------------------------------
 function drawChart(hd) {
@@ -1153,6 +1277,9 @@ async function refresh() {
     updateNeighbours(d.neighbours);
     updateEvents(d.events);
     updateConfig(d.config);
+    updateMode(d.mode || 'normal');
+    updateAntenna(d.signal);
+    updatePdp(d.pdp);
     updateBands(d.bands);
 
     document.getElementById('updated').textContent = new Date().toLocaleTimeString();
