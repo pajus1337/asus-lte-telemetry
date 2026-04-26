@@ -49,8 +49,8 @@ log() {
         return 0
     fi
 
-    _ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "????-??-?? ??:??:??")
-    _line="[${_ts}] [${_level}] [${_component}] ${_msg}"
+    _log_ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "????-??-?? ??:??:??")
+    _line="[${_log_ts}] [${_level}] [${_component}] ${_msg}"
 
     # Always to stderr for immediate visibility
     echo "$_line" >&2
