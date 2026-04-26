@@ -21,7 +21,7 @@ if [ ! -f "$DB_PATH" ] || [ ! -x "$SQLITE" ]; then
     exit 0
 fi
 
-_now=$("$SQLITE" ':memory:' "SELECT strftime('%s','now');" 2>/dev/null)
+_now=$(awk 'BEGIN { print systime() }')
 
 # ---------------------------------------------------------------------------
 # signal — latest lte_samples row

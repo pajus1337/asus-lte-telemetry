@@ -198,11 +198,13 @@ check_dependency() {
 # ---------------------------------------------------------------------------
 
 # now_epoch — current unix timestamp as integer epoch
-# Uses SQLite strftime('%s','now') — does NOT rely on 'date +%s' which is broken
-# on BusyBox and may also be broken on this router's coreutils-date build.
-# SQLite is always available (dispatcher exits immediately if it isn't).
+# Uses awk systime() — BusyBox built-in, no external dependencies.
+# date '+%s' is NOT used: BusyBox date ignores %s and outputs human-readable
+# text (e.g. "2026-04-26 16:49:07") which breaks every SQL INSERT and
+# arithmetic expression. awk systime() calls time(2) directly and always
+# returns an integer regardless of locale, timezone or date binary quirks.
 now_epoch() {
-    "$SQLITE" ':memory:' "SELECT strftime('%s','now');" 2>/dev/null
+    awk 'BEGIN { print systime() }'
 }
 
 # is_integer VALUE — returns 0 if VALUE is an integer (positive or negative)
