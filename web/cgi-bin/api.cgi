@@ -21,7 +21,7 @@ if [ ! -f "$DB_PATH" ] || [ ! -x "$SQLITE" ]; then
     exit 0
 fi
 
-_now=$(/opt/bin/date +%s 2>/dev/null || date +%s)
+_now=$("$SQLITE" ':memory:' "SELECT strftime('%s','now');" 2>/dev/null)
 
 # ---------------------------------------------------------------------------
 # signal — latest lte_samples row

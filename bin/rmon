@@ -112,7 +112,7 @@ fmt_bytes() {
 
 # Relative age of a unix timestamp: "2m ago", "never"
 fmt_age() {
-    _now=$(/opt/bin/date +%s)
+    _now=$("$SQLITE" ':memory:' "SELECT strftime('%s','now');" 2>/dev/null)
     awk -v ts="$1" -v now="$_now" 'BEGIN {
         if (ts + 0 == 0) { print "never"; exit }
         d = now - ts
@@ -635,7 +635,7 @@ cmd_db() {
                 *d) days=$(echo "$duration" | sed 's/d$//') ;;
                 *)  echo "Duration must end with 'd' (e.g. 30d)" >&2; exit 1 ;;
             esac
-            now=$(/opt/bin/date +%s)
+            now=$("$SQLITE" ':memory:' "SELECT strftime('%s','now');" 2>/dev/null)
             cutoff=$(( now - days * 86400 ))
             printf "Purge samples older than %s days (before %s)? [y/N] " \
                 "$days" "$(/opt/bin/date -d "@${cutoff}" 2>/dev/null || echo "$cutoff")"
@@ -673,7 +673,7 @@ cmd_export() {
         esac
     done
 
-    now=$(/opt/bin/date +%s)
+    now=$("$SQLITE" ':memory:' "SELECT strftime('%s','now');" 2>/dev/null)
     if [ -n "$duration" ]; then
         case "$duration" in
             *h) n=$(echo "$duration" | sed 's/h$//'); cutoff=$(( now - n * 3600 )) ;;

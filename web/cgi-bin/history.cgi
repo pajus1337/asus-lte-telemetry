@@ -46,7 +46,8 @@ printf '%s' "${_n:-0}" | grep -qE '^[0-9]+$' || _n=0
 [ -z "$_n" ] && _n=0
 [ "$_n" -gt 2000 ] && _n=2000
 
-_since=$(( $(/opt/bin/date +%s 2>/dev/null || date +%s) - _hours * 3600 ))
+_now=$("$SQLITE" ':memory:' "SELECT strftime('%s','now');" 2>/dev/null)
+_since=$(( _now - _hours * 3600 ))
 
 if [ "$_n" -gt 0 ]; then
     _query="SELECT ts, ${_metric} FROM (

@@ -105,7 +105,7 @@ acquire_lock() {
                 _lock_ts_file="${_lock_path}/ts"
                 if [ -f "$_lock_ts_file" ]; then
                     _lock_ts=$(cat "$_lock_ts_file" 2>/dev/null)
-                    _now=$(/opt/bin/date '+%s' 2>/dev/null)
+                    _now=$(now_epoch)
                     if [ -n "$_lock_ts" ] && [ -n "$_now" ]; then
                         _age=$(( _now - _lock_ts ))
                         if [ "$_age" -gt "$_max_age" ]; then
@@ -130,7 +130,7 @@ acquire_lock() {
     # Atomic mkdir
     if mkdir "$_lock_path" 2>/dev/null; then
         echo $$ > "${_lock_path}/pid"
-        /opt/bin/date '+%s' > "${_lock_path}/ts" 2>/dev/null
+        now_epoch > "${_lock_path}/ts"
         return 0
     else
         return 1
@@ -197,9 +197,12 @@ check_dependency() {
 # Utility helpers
 # ---------------------------------------------------------------------------
 
-# now_epoch — current unix timestamp
+# now_epoch — current unix timestamp as integer epoch
+# Uses SQLite strftime('%s','now') — does NOT rely on 'date +%s' which is broken
+# on BusyBox and may also be broken on this router's coreutils-date build.
+# SQLite is always available (dispatcher exits immediately if it isn't).
 now_epoch() {
-    /opt/bin/date '+%s' 2>/dev/null
+    "$SQLITE" ':memory:' "SELECT strftime('%s','now');" 2>/dev/null
 }
 
 # is_integer VALUE — returns 0 if VALUE is an integer (positive or negative)
