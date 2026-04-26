@@ -359,6 +359,21 @@ if [ -f "$INSTALL_BASE/bin/rmon" ]; then
     ok "Symlink created: /opt/bin/rmon"
 fi
 
+# -- ensure 'entware' symlink for .asusrouter / JFFS boot compatibility -----
+# .asusrouter and JFFS fallback scripts reference /tmp/mnt/System/entware
+# but the companion repo installer places Entware into asusware.arm/.
+# Without this symlink all fallback autostart mechanisms exit silently at boot.
+_usb_root=$(dirname "$INSTALL_BASE")
+if [ -d "$_usb_root/asusware.arm" ]; then
+    if [ ! -e "$_usb_root/entware" ]; then
+        ln -s asusware.arm "$_usb_root/entware"
+        ok "Created symlink: $_usb_root/entware → asusware.arm"
+        info "  Enables .asusrouter / JFFS fallback scripts to find Entware at boot."
+    else
+        ok "Entware symlink already present: $_usb_root/entware"
+    fi
+fi
+
 # =============================================================================
 # Step 4: write default config (if not present)
 # =============================================================================
@@ -463,6 +478,7 @@ INSTALL_BASE=$INSTALL_BASE
 AUTOSTART_DASHBOARD=$_autostart_web
 
 start_service() {
+    sleep 3
     if [ -x "\$INSTALL_BASE/bin/dispatcher.sh" ]; then
         nohup sh -c "while true; do \$INSTALL_BASE/bin/dispatcher.sh >> \$INSTALL_BASE/logs/dispatcher.log 2>&1; /opt/bin/sleep 60; done" >/dev/null 2>&1 &
         echo "asus-lte-telemetry dispatcher started"
