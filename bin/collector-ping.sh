@@ -68,14 +68,14 @@ ping_one() {
     # or: "rtt min/avg/max/mdev = 12.3/15.6/20.1/2.3 ms"
     _rtt_line=$(echo "$_output" | grep -iE 'min/avg/max')
     if [ -n "$_rtt_line" ]; then
-        _rtts=$(echo "$_rtt_line" | grep -o '[0-9.]*\/[0-9.]*\/[0-9.]*' | head -1)
+        _rtts=$(echo "$_rtt_line" | grep -o '[0-9.]*/[0-9.]*/[0-9.]*' | head -1)
         if [ -n "$_rtts" ]; then
             PING_RTT_MIN=$(echo "$_rtts" | cut -d'/' -f1)
             PING_RTT_AVG=$(echo "$_rtts" | cut -d'/' -f2)
             PING_RTT_MAX=$(echo "$_rtts" | cut -d'/' -f3)
         fi
         # mdev (4th field, if present)
-        _rtts4=$(echo "$_rtt_line" | grep -o '[0-9.]*\/[0-9.]*\/[0-9.]*\/[0-9.]*' | head -1)
+        _rtts4=$(echo "$_rtt_line" | grep -o '[0-9.]*/[0-9.]*/[0-9.]*/[0-9.]*' | head -1)
         if [ -n "$_rtts4" ]; then
             PING_RTT_MDEV=$(echo "$_rtts4" | cut -d'/' -f4)
         fi
