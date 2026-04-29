@@ -1,5 +1,10 @@
 # asus-lte-telemetry
 
+> **Project on hold.** Development has been suspended — the router this project was
+> built and tested on (ASUS 4G-AC86U) is no longer available. The codebase is
+> published as-is for anyone who finds it useful on the same or similar hardware.
+> No further development or maintenance is planned at this time.
+
 Lightweight LTE modem and system monitoring for **ASUS 4G-AC86U** routers running
 stock firmware with [Entware](https://github.com/Entware/Entware).
 
@@ -238,11 +243,13 @@ in the router UI, which modifies `nwscanmode`, not the band bitmask.
 
 ## Project status
 
-**v0.5.0** — stable, tested on ASUS 4G-AC86U with firmware `3.0.0.4.382.x` and
-modem firmware `EM12GPAR01A21M4G_02.001.02.001`.
+**Suspended.** The router (ASUS 4G-AC86U) this project was developed on and for is
+no longer in use. Development has stopped at **v0.5.0**.
 
-All collectors, dispatcher, HTTP dashboard, and band locking are implemented and
-confirmed working. Breaking changes may still occur before v1.0.
+At the point of suspension, all core features were confirmed working on the target
+hardware: collectors, dispatcher, HTTP dashboard, band locking, and the `rmon` CLI.
+The codebase is left in a functional state and published for anyone with the same
+or compatible hardware.
 
 ## License
 
